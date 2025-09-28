@@ -26,7 +26,7 @@ export default function NoteCard({ note, onClick }: NoteCardProps) {
 
   return (
     <div
-      className="border border-gray-200 hover:border-gray-400 transition-colors cursor-pointer group bg-white"
+      className="border border-gray-200 hover:border-gray-400 transition-colors cursor-pointer group bg-white rounded-lg shadow-sm hover:shadow-md"
       onClick={onClick}
     >
       <div className="p-6">
@@ -34,7 +34,7 @@ export default function NoteCard({ note, onClick }: NoteCardProps) {
           <h3 className="text-lg font-medium text-black group-hover:text-gray-700 transition-colors">
             {note.title}
           </h3>
-          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
             {note.category}
           </span>
         </div>
@@ -48,7 +48,7 @@ export default function NoteCard({ note, onClick }: NoteCardProps) {
             {note.tags.slice(0, 3).map((tag, index) => (
               <span
                 key={index}
-                className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded border"
+                className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-md border"
               >
                 {tag}
               </span>

@@ -34,7 +34,7 @@ export default function SearchBar({ value, onChange, placeholder = "搜索笔记
     <div className="relative w-full max-w-xl">
       <div
         className={`
-          relative flex items-center border transition-colors
+          relative flex items-center border transition-colors rounded-lg
           ${isFocused ? 'border-black' : 'border-gray-300'}
         `}
       >

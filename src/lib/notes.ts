@@ -158,6 +158,21 @@ export function searchNotes(notes: Note[], query: string): Note[] {
   );
 }
 
+// 全局搜索所有笔记
+export function searchAllNotes(query: string): Note[] {
+  const allNotes = getNotes();
+  
+  if (!query.trim()) return allNotes;
+  
+  const lowercaseQuery = query.toLowerCase();
+  return allNotes.filter(note =>
+    note.title.toLowerCase().includes(lowercaseQuery) ||
+    note.content.toLowerCase().includes(lowercaseQuery) ||
+    note.category.toLowerCase().includes(lowercaseQuery) ||
+    note.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery))
+  );
+}
+
 // 创建新笔记
 export function createNote(noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>): Note {
   const notes = getNotes();
@@ -205,4 +220,94 @@ export function deleteNote(id: string): boolean {
   
   saveNotes(filteredNotes);
   return true;
+}
+
+// 创建新分类
+export function createCategory(categoryData: Omit<NoteCategory, 'id'>): NoteCategory {
+  const categories = getCategories();
+  
+  const newCategory: NoteCategory = {
+    ...categoryData,
+    id: generateId()
+  };
+  
+  const updatedCategories = [...categories, newCategory];
+  saveCategories(updatedCategories);
+  
+  return newCategory;
+}
+
+// 更新分类
+export function updateCategory(id: string, categoryData: Partial<Omit<NoteCategory, 'id'>>): NoteCategory | null {
+  const categories = getCategories();
+  const categoryIndex = categories.findIndex(category => category.id === id);
+  
+  if (categoryIndex === -1) return null;
+  
+  const updatedCategory: NoteCategory = {
+    ...categories[categoryIndex],
+    ...categoryData
+  };
+  
+  categories[categoryIndex] = updatedCategory;
+  saveCategories(categories);
+  
+  // 如果修改了分类名称，同时更新所有使用该分类的笔记
+  if (categoryData.name && categoryData.name !== categories[categoryIndex].name) {
+    const oldName = categories[categoryIndex].name;
+    const newName = categoryData.name;
+    updateNotesCategory(oldName, newName);
+  }
+  
+  return updatedCategory;
+}
+
+// 删除分类
+export function deleteCategory(id: string): boolean {
+  const categories = getCategories();
+  const categoryToDelete = categories.find(category => category.id === id);
+  
+  if (!categoryToDelete) return false;
+  
+  // 不允许删除"其他"分类
+  if (categoryToDelete.name === '其他') return false;
+  
+  const filteredCategories = categories.filter(category => category.id !== id);
+  
+  if (filteredCategories.length === categories.length) {
+    return false; // 没有找到要删除的分类
+  }
+  
+  saveCategories(filteredCategories);
+  
+  // 将使用已删除分类的笔记移动到"其他"分类
+  moveNotesToOtherCategory(categoryToDelete.name);
+  
+  return true;
+}
+
+// 将使用已删除分类的笔记移动到"其他"分类
+function moveNotesToOtherCategory(categoryName: string): void {
+  const notes = getNotes();
+  const updatedNotes = notes.map(note => {
+    if (note.category === categoryName) {
+      return { ...note, category: '其他', updatedAt: new Date().toISOString() };
+    }
+    return note;
+  });
+  
+  saveNotes(updatedNotes);
+}
+
+// 更新笔记的分类名称
+function updateNotesCategory(oldCategoryName: string, newCategoryName: string): void {
+  const notes = getNotes();
+  const updatedNotes = notes.map(note => {
+    if (note.category === oldCategoryName) {
+      return { ...note, category: newCategoryName, updatedAt: new Date().toISOString() };
+    }
+    return note;
+  });
+  
+  saveNotes(updatedNotes);
 }
