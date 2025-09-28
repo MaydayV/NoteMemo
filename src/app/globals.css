@@ -24,3 +24,14 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* 确保所有模态框背景遮罩层透明度一致 */
+.fixed.inset-0.bg-black {
+  background-color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 确保模态框内容区域圆角一致 */
+.bg-white.rounded-lg {
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}

@@ -124,7 +124,7 @@ export default function NoteForm({ note, categories, isOpen, onClose, onSave }: 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-35 flex items-center justify-center z-50 p-4">
       <div className="bg-white max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col rounded-lg">
         {/* Header */}
         <div className="border-b border-gray-200 p-6 flex justify-between items-center">
@@ -275,8 +275,7 @@ export default function NoteForm({ note, categories, isOpen, onClose, onSave }: 
                     title="链接"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 010-5.656l4-4a4 4 0 015.656 5.656l-1.1 1.1" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                     </svg>
                   </button>
                   <button

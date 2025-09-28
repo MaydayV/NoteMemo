@@ -41,7 +41,7 @@ export default function NoteModal({ note, isOpen, onClose, onEdit, onDelete }: N
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-35 flex items-center justify-center z-50 p-4">
       <div className="bg-white max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col rounded-lg">
         {/* Header */}
         <div className="border-b border-gray-200 p-6 flex justify-between items-start">

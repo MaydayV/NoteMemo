@@ -46,7 +46,7 @@ export default function NoteCard({ note, onClick }: NoteCardProps) {
           <h3 className="text-lg font-medium text-black group-hover:text-gray-700 transition-colors line-clamp-2">
             {note.title}
           </h3>
-          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-md flex-shrink-0 ml-2">
+          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-md flex-shrink-0 ml-2 whitespace-nowrap">
             {note.category}
           </span>
         </div>
@@ -73,7 +73,7 @@ export default function NoteCard({ note, onClick }: NoteCardProps) {
             )}
           </div>
 
-          <span className="text-xs text-gray-400 flex-shrink-0">
+          <span className="text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">
             {formatDate(note.updatedAt)}
           </span>
         </div>
