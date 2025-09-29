@@ -21,7 +21,7 @@
 - ✅ **响应式设计** - 适配各种设备屏幕
 - ✅ **键盘快捷键** - Cmd/Ctrl + K 快速聚焦搜索
 - ✅ **PWA 支持** - 支持添加到主屏幕，离线访问
-- ✅ **多设备同步** - 可选启用Vercel KV存储实现多设备同步
+- ✅ **多设备同步** - 可选启用MongoDB Atlas实现多设备同步
 
 ## 快速开始
 
@@ -71,20 +71,20 @@ npm run dev
 
 ### 启用多设备同步（可选）
 
-NoteMemo默认使用浏览器本地存储保存笔记数据。如需在多设备间同步笔记，可以启用Vercel KV存储：
+NoteMemo默认使用浏览器本地存储保存笔记数据。如需在多设备间同步笔记，可以启用MongoDB Atlas存储：
 
-1. 在Vercel控制台创建KV数据库：
-   - 登录Vercel控制台
-   - 进入项目 → Storage
-   - 点击"Create New" → 选择"KV"
-   - 在Marketplace数据库提供商中选择"Redis"
-   - 按照向导完成创建
+1. 在MongoDB Atlas创建数据库：
+   - 注册/登录 [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
+   - 创建一个新的免费集群（M0级别）
+   - 设置数据库用户和密码
+   - 配置网络访问（建议允许所有IP访问，或者至少包含Vercel的IP范围）
+   - 获取连接字符串，格式如：`mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/notememo?retryWrites=true&w=majority`
 
-2. 创建完成后，Vercel会自动为项目添加以下环境变量：
-   - `KV_URL`
-   - `KV_REST_API_URL`
-   - `KV_REST_API_TOKEN`
-   - `KV_REST_API_READ_ONLY_TOKEN`
+2. 在Vercel项目设置中添加环境变量：
+   - 进入项目 Settings > Environment Variables
+   - 添加变量名：`MONGODB_URI`
+   - 值：你的MongoDB连接字符串
+   - 确保选中所有环境（Production, Preview, Development）
 
 3. 重新部署项目
 
@@ -97,7 +97,7 @@ NoteMemo默认使用浏览器本地存储保存笔记数据。如需在多设备
 
 5. 在其他设备上使用相同的用户ID可同步笔记数据
 
-> **注意**：多设备同步功能需要Vercel KV存储支持，这是一项付费服务，但有免费额度可供小型应用使用。
+> **注意**：MongoDB Atlas提供免费层级（M0），可存储512MB数据，足够个人笔记使用。
 
 ## 技术栈
 
@@ -107,7 +107,7 @@ NoteMemo默认使用浏览器本地存储保存笔记数据。如需在多设备
 - **构建工具**: Turbopack
 - **部署**: Vercel
 - **PWA**: next-pwa
-- **存储**: 本地存储 + Vercel KV（可选）
+- **存储**: 本地存储 + MongoDB Atlas（可选）
 
 ## 项目结构
 
@@ -131,7 +131,8 @@ src/
 ├── lib/
 │   ├── auth.ts           # 认证工具函数
 │   ├── notes.ts          # 笔记数据处理
-│   └── settings.ts       # 应用设置管理
+│   ├── settings.ts       # 应用设置管理
+│   └── mongodb.ts        # MongoDB连接工具
 └── types/
     ├── note.ts           # 笔记相关类型定义
     └── next-pwa.d.ts     # PWA 类型声明
@@ -167,8 +168,9 @@ src/
 ### 多设备同步
 
 - 默认情况下，笔记存储在本地浏览器中
-- 可选启用Vercel KV存储实现多设备同步
+- 可选启用MongoDB Atlas存储实现多设备同步
 - 使用相同用户ID可在不同设备间同步笔记
+- MongoDB Atlas免费层提供512MB存储空间，可存储约25万条简单笔记
 
 ### 示例笔记
 
@@ -183,10 +185,7 @@ src/
 | 变量名 | 说明 | 示例 |
 |--------|------|------|
 | `ACCESS_CODE` | 6位数字访问码，用于登录验证 | `123456` |
-| `KV_URL` | Vercel KV数据库URL（可选） | `redis://...` |
-| `KV_REST_API_URL` | Vercel KV REST API URL（可选） | `https://...` |
-| `KV_REST_API_TOKEN` | Vercel KV API令牌（可选） | `vercel_kv_...` |
-| `KV_REST_API_READ_ONLY_TOKEN` | Vercel KV只读令牌（可选） | `vercel_kv_...` |
+| `MONGODB_URI` | MongoDB Atlas连接字符串（可选） | `mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/notememo?retryWrites=true&w=majority` |
 
 > **注意**：在 Vercel 部署时，请直接在 Vercel 界面中添加环境变量，不要使用引用语法（如 `@access_code`）
 
@@ -216,6 +215,29 @@ NoteMemo 支持 PWA（渐进式 Web 应用）功能，允许用户将应用添�
 - 添加到主屏幕
 - 离线访问
 - 应用更新提示
+
+## MongoDB Atlas 使用说明
+
+### 为什么选择 MongoDB Atlas
+
+- **更大存储空间**：免费层提供512MB存储，比Vercel KV的30MB大得多
+- **文档型数据库**：天然适合存储笔记这类半结构化数据
+- **强大的查询能力**：支持复杂查询和索引
+- **可扩展性**：随着应用增长可以轻松升级
+
+### 数据安全
+
+- MongoDB Atlas提供自动备份功能
+- 数据加密传输和存储
+- 细粒度的访问控制
+
+### 数据结构
+
+NoteMemo在MongoDB中使用两个集合：
+- `notes`：存储所有笔记
+- `categories`：存储分类信息
+
+每条数据都包含`userId`字段，确保不同用户的数据隔离。
 
 ## 许可证
 

@@ -1,6 +1,7 @@
 import { Note, NoteCategory } from '@/types/note';
-import { kv } from '@vercel/kv';
-import { isSyncEnabled, getSyncKey } from './settings';
+import { isSyncEnabled, getSyncUserId } from './settings';
+import { getCollection } from './mongodb';
+import { Document, WithId } from 'mongodb';
 
 // 默认笔记分类
 export const defaultCategories: NoteCategory[] = [
@@ -260,26 +261,37 @@ export async function getNotes(): Promise<Note[]> {
   
   if (syncEnabled) {
     try {
-      // 尝试从KV获取笔记
-      const accessCode = process.env.NEXT_PUBLIC_ACCESS_CODE || process.env.ACCESS_CODE || '';
-      const key = getSyncKey(accessCode);
-      const notes = await kv.get<Note[]>(key);
+      // 获取用户ID
+      const userId = getSyncUserId();
+      if (!userId) {
+        throw new Error('用户ID未设置');
+      }
+      
+      // 从MongoDB获取笔记
+      const collection = await getCollection('notes');
+      const documents = await collection.find({ userId }).toArray();
+      // 使用类型断言将MongoDB文档转换为Note类型
+      const notes = documents.map(doc => {
+        // 移除MongoDB自动添加的_id字段
+        const { _id, ...noteData } = doc;
+        return noteData as Note;
+      });
       
       if (notes && notes.length > 0) {
-        // 如果KV中有数据，返回KV数据
+        // 如果MongoDB中有数据，返回MongoDB数据
         return notes;
       }
       
-      // 如果KV中没有数据，使用本地数据
+      // 如果MongoDB中没有数据，使用本地数据
       const localNotes = getLocalNotes();
       
-      // 将本地数据同步到KV
-      await saveNotesToKV(localNotes);
+      // 将本地数据同步到MongoDB
+      await saveNotesToMongoDB(localNotes, userId);
       
       return localNotes;
     } catch (error) {
-      console.error('Error loading notes from KV:', error);
-      // 如果从KV获取失败，回退到本地存储
+      console.error('Error loading notes from MongoDB:', error);
+      // 如果从MongoDB获取失败，回退到本地存储
       return getLocalNotes();
     }
   } else {
@@ -306,14 +318,23 @@ function getLocalNotes(): Note[] {
   }
 }
 
-// 保存笔记到KV
-async function saveNotesToKV(notes: Note[]): Promise<void> {
+// 保存笔记到MongoDB
+async function saveNotesToMongoDB(notes: Note[], userId: string): Promise<void> {
   try {
-    const accessCode = process.env.NEXT_PUBLIC_ACCESS_CODE || process.env.ACCESS_CODE || '';
-    const key = getSyncKey(accessCode);
-    await kv.set(key, notes);
+    const collection = await getCollection('notes');
+    
+    // 删除用户现有的笔记
+    await collection.deleteMany({ userId });
+    
+    // 添加用户ID到每条笔记
+    const notesWithUserId = notes.map(note => ({ ...note, userId }));
+    
+    // 批量插入笔记
+    if (notesWithUserId.length > 0) {
+      await collection.insertMany(notesWithUserId);
+    }
   } catch (error) {
-    console.error('Error saving notes to KV:', error);
+    console.error('Error saving notes to MongoDB:', error);
     throw error;
   }
 }
@@ -334,12 +355,16 @@ export async function saveNotes(notes: Note[]): Promise<void> {
   // 保存到本地
   saveNotesToLocal(notes);
   
-  // 如果启用了同步，也保存到KV
+  // 如果启用了同步，也保存到MongoDB
   if (isSyncEnabled()) {
     try {
-      await saveNotesToKV(notes);
+      const userId = getSyncUserId();
+      if (!userId) {
+        throw new Error('用户ID未设置');
+      }
+      await saveNotesToMongoDB(notes, userId);
     } catch (error) {
-      console.error('Failed to sync notes to KV:', error);
+      console.error('Failed to sync notes to MongoDB:', error);
       // 同步失败不阻止本地保存
     }
   }
@@ -352,26 +377,37 @@ export async function getCategories(): Promise<NoteCategory[]> {
   
   if (syncEnabled) {
     try {
-      // 尝试从KV获取分类
-      const accessCode = process.env.NEXT_PUBLIC_ACCESS_CODE || process.env.ACCESS_CODE || '';
-      const key = `categories_${getSyncKey(accessCode)}`;
-      const categories = await kv.get<NoteCategory[]>(key);
+      // 获取用户ID
+      const userId = getSyncUserId();
+      if (!userId) {
+        throw new Error('用户ID未设置');
+      }
+      
+      // 从MongoDB获取分类
+      const collection = await getCollection('categories');
+      const documents = await collection.find({ userId }).toArray();
+      // 使用类型断言将MongoDB文档转换为NoteCategory类型
+      const categories = documents.map(doc => {
+        // 移除MongoDB自动添加的_id字段
+        const { _id, ...categoryData } = doc;
+        return categoryData as NoteCategory;
+      });
       
       if (categories && categories.length > 0) {
-        // 如果KV中有数据，返回KV数据
+        // 如果MongoDB中有数据，返回MongoDB数据
         return categories;
       }
       
-      // 如果KV中没有数据，使用本地数据
+      // 如果MongoDB中没有数据，使用本地数据
       const localCategories = getLocalCategories();
       
-      // 将本地数据同步到KV
-      await saveCategoriesToKV(localCategories);
+      // 将本地数据同步到MongoDB
+      await saveCategoriesToMongoDB(localCategories, userId);
       
       return localCategories;
     } catch (error) {
-      console.error('Error loading categories from KV:', error);
-      // 如果从KV获取失败，回退到本地存储
+      console.error('Error loading categories from MongoDB:', error);
+      // 如果从MongoDB获取失败，回退到本地存储
       return getLocalCategories();
     }
   } else {
@@ -397,14 +433,23 @@ function getLocalCategories(): NoteCategory[] {
   }
 }
 
-// 保存分类到KV
-async function saveCategoriesToKV(categories: NoteCategory[]): Promise<void> {
+// 保存分类到MongoDB
+async function saveCategoriesToMongoDB(categories: NoteCategory[], userId: string): Promise<void> {
   try {
-    const accessCode = process.env.NEXT_PUBLIC_ACCESS_CODE || process.env.ACCESS_CODE || '';
-    const key = `categories_${getSyncKey(accessCode)}`;
-    await kv.set(key, categories);
+    const collection = await getCollection('categories');
+    
+    // 删除用户现有的分类
+    await collection.deleteMany({ userId });
+    
+    // 添加用户ID到每个分类
+    const categoriesWithUserId = categories.map(category => ({ ...category, userId }));
+    
+    // 批量插入分类
+    if (categoriesWithUserId.length > 0) {
+      await collection.insertMany(categoriesWithUserId);
+    }
   } catch (error) {
-    console.error('Error saving categories to KV:', error);
+    console.error('Error saving categories to MongoDB:', error);
     throw error;
   }
 }
@@ -425,12 +470,16 @@ export async function saveCategories(categories: NoteCategory[]): Promise<void> 
   // 保存到本地
   saveCategoriesToLocal(categories);
   
-  // 如果启用了同步，也保存到KV
+  // 如果启用了同步，也保存到MongoDB
   if (isSyncEnabled()) {
     try {
-      await saveCategoriesToKV(categories);
+      const userId = getSyncUserId();
+      if (!userId) {
+        throw new Error('用户ID未设置');
+      }
+      await saveCategoriesToMongoDB(categories, userId);
     } catch (error) {
-      console.error('Failed to sync categories to KV:', error);
+      console.error('Failed to sync categories to MongoDB:', error);
       // 同步失败不阻止本地保存
     }
   }
