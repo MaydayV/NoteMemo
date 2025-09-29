@@ -35,22 +35,27 @@ export default function NoteForm({ note, categories, isOpen, onClose, onSave }: 
     setPreviewMode(false);
   }, [note, categories]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const tagArray = tags
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(tag => tag !== '');
+    try {
+      const tagArray = tags
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag !== '');
 
-    onSave({
-      title,
-      content,
-      category,
-      tags: tagArray,
-    });
-    
-    onClose();
+      onSave({
+        title,
+        content,
+        category,
+        tags: tagArray,
+      });
+      
+      onClose();
+    } catch (error) {
+      console.error('保存笔记时出错:', error);
+      alert('保存笔记失败，请重试');
+    }
   };
 
   const insertMarkdownSyntax = (syntax: string, placeholder: string = '') => {

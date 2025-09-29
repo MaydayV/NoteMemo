@@ -65,8 +65,13 @@ export default function CategoryModal({ isOpen, onClose, onSave, categories: ini
   };
 
   const handleSave = () => {
-    onSave(categories);
-    onClose();
+    try {
+      onSave(categories);
+      onClose();
+    } catch (error) {
+      console.error('保存分类时出错:', error);
+      alert('保存分类失败，请重试');
+    }
   };
 
   // 分类排序功能
