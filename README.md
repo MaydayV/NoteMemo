@@ -2,6 +2,16 @@
 
 一个基于 Next.js 的极简笔记备忘录应用，采用黑白极简设计风格，支持快速搜索和分类管理。
 
+## 应用截图
+
+### 登录页面
+
+![登录页面](/public/Loginpage.png)
+
+### 笔记列表页面
+
+![笔记列表页面](/public/Listpage.png)
+
 ## 功能特性
 
 - ✅ **六位数字访问验证** - 通过环境变量设置访问码
@@ -12,6 +22,7 @@
 - ✅ **无数据库设计** - 使用本地存储，无需配置数据库
 - ✅ **响应式设计** - 适配各种设备屏幕
 - ✅ **键盘快捷键** - Cmd/Ctrl + K 快速聚焦搜索
+- ✅ **PWA 支持** - 支持添加到主屏幕，离线访问
 
 ## 快速开始
 
@@ -64,6 +75,7 @@ npm run dev
 - **样式**: Tailwind CSS
 - **构建工具**: Turbopack
 - **部署**: Vercel
+- **PWA**: next-pwa
 
 ## 项目结构
 
@@ -78,12 +90,17 @@ src/
 │   ├── LoginForm.tsx      # 登录表单
 │   ├── SearchBar.tsx      # 搜索栏
 │   ├── NoteCard.tsx       # 笔记卡片
-│   └── NoteModal.tsx      # 笔记详情模态框
+│   ├── NoteModal.tsx      # 笔记详情模态框
+│   ├── NoteForm.tsx       # 笔记编辑表单
+│   ├── CategoryModal.tsx  # 分类管理模态框
+│   ├── MarkdownRenderer.tsx # Markdown 渲染组件
+│   └── PWAInitializer.tsx # PWA 初始化组件
 ├── lib/
 │   ├── auth.ts           # 认证工具函数
 │   └── notes.ts          # 笔记数据处理
 └── types/
-    └── note.ts           # TypeScript 类型定义
+    ├── note.ts           # 笔记相关类型定义
+    └── next-pwa.d.ts     # PWA 类型声明
 ```
 
 ## 使用说明
@@ -92,7 +109,7 @@ src/
 
 笔记数据存储在浏览器的本地存储中，包含以下信息：
 - 标题
-- 内容（支持简单的 Markdown 格式）
+- 内容（支持 Markdown 格式）
 - 分类
 - 标签
 - 创建和更新时间
@@ -111,11 +128,12 @@ src/
 - 开发技巧
 - 其他
 
+你可以通过分类管理功能添加、编辑或删除分类。
+
 ### 示例笔记
 
 项目包含了一些示例笔记，包括：
 - Git 常用命令
-- Docker 基础命令
 - Next.js 部署到 Vercel
 
 ## 环境变量
@@ -138,7 +156,18 @@ npm start
 
 # 代码检查
 npm run lint
+
+# 生成 PWA 图标资源
+npm run pwa-assets
 ```
+
+## PWA 支持
+
+NoteMemo 支持 PWA（渐进式 Web 应用）功能，允许用户将应用添加到主屏幕并离线使用。PWA 功能包括：
+
+- 添加到主屏幕
+- 离线访问
+- 应用更新提示
 
 ## 许可证
 

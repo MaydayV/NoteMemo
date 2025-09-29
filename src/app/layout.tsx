@@ -1,6 +1,7 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from "next/font/google";
 import './globals.css';
+import PWAInitializer from '@/components/PWAInitializer';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,17 +17,10 @@ export const metadata: Metadata = {
   title: 'NoteMemo - 极简笔记备忘录',
   description: '一款支持Markdown的极简笔记备忘录应用',
   manifest: '/manifest.json',
-  themeColor: '#000000',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
     title: 'NoteMemo',
-  },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
   },
   icons: {
     icon: [
@@ -37,6 +31,14 @@ export const metadata: Metadata = {
       { url: '/icons/apple-icon-180x180.png', sizes: '180x180', type: 'image/png' },
     ],
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#000000',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -53,9 +55,9 @@ export default function RootLayout({
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
         <link rel="apple-touch-icon" href="/icons/apple-icon-180x180.png" />
-        <script src="/pwa.js" defer></script>
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <PWAInitializer />
         {children}
       </body>
     </html>
