@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import hljs from 'highlight.js';
@@ -8,6 +8,15 @@ import 'highlight.js/styles/github.css';
 
 interface MarkdownRendererProps {
   content: string;
+}
+
+// 定义更详细的组件props类型
+interface ComponentProps {
+  node?: any;
+  inline?: boolean;
+  className?: string;
+  children: React.ReactNode;
+  [key: string]: any;
 }
 
 export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
@@ -25,7 +34,7 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          code: ({ node, inline, className, children, ...props }) => {
+          code: ({ node, inline, className, children, ...props }: ComponentProps) => {
             const match = /language-(\w+)/.exec(className || '');
             const language = match ? match[1] : '';
             
@@ -47,35 +56,48 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
             );
           },
           // 增强其他Markdown元素的样式
-          h1: ({ children, ...props }) => <h1 className="text-2xl font-bold mt-6 mb-4" {...props}>{children}</h1>,
-          h2: ({ children, ...props }) => <h2 className="text-xl font-bold mt-5 mb-3" {...props}>{children}</h2>,
-          h3: ({ children, ...props }) => <h3 className="text-lg font-bold mt-4 mb-2" {...props}>{children}</h3>,
-          p: ({ children, ...props }) => <p className="my-3" {...props}>{children}</p>,
-          ul: ({ children, ...props }) => <ul className="list-disc pl-6 my-3" {...props}>{children}</ul>,
-          ol: ({ children, ...props }) => <ol className="list-decimal pl-6 my-3" {...props}>{children}</ol>,
-          li: ({ children, ...props }) => <li className="my-1" {...props}>{children}</li>,
-          blockquote: ({ children, ...props }) => (
+          h1: ({ children, ...props }: ComponentProps) => <h1 className="text-2xl font-bold mt-6 mb-4" {...props}>{children}</h1>,
+          h2: ({ children, ...props }: ComponentProps) => <h2 className="text-xl font-bold mt-5 mb-3" {...props}>{children}</h2>,
+          h3: ({ children, ...props }: ComponentProps) => <h3 className="text-lg font-bold mt-4 mb-2" {...props}>{children}</h3>,
+          p: ({ children, ...props }: ComponentProps) => {
+            // 检查children是否包含pre或div元素，如果包含则使用div代替p
+            const hasBlockElements = React.Children.toArray(children).some(
+              (child) => 
+                React.isValidElement(child) && 
+                (child.type === 'pre' || child.type === 'div')
+            );
+            
+            return hasBlockElements ? (
+              <div className="my-3" {...props}>{children}</div>
+            ) : (
+              <p className="my-3" {...props}>{children}</p>
+            );
+          },
+          ul: ({ children, ...props }: ComponentProps) => <ul className="list-disc pl-6 my-3" {...props}>{children}</ul>,
+          ol: ({ children, ...props }: ComponentProps) => <ol className="list-decimal pl-6 my-3" {...props}>{children}</ol>,
+          li: ({ children, ...props }: ComponentProps) => <li className="my-1" {...props}>{children}</li>,
+          blockquote: ({ children, ...props }: ComponentProps) => (
             <blockquote className="border-l-4 border-gray-300 pl-4 py-1 italic my-4 text-gray-700" {...props}>{children}</blockquote>
           ),
-          a: ({ children, ...props }) => (
+          a: ({ children, ...props }: ComponentProps) => (
             <a className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
           ),
-          img: ({ src, alt, ...props }) => (
+          img: ({ src, alt, ...props }: ComponentProps) => (
             // eslint-disable-next-line @next/next/no-img-element
             <img className="max-w-full h-auto rounded-md my-4" src={src} alt={alt || ''} {...props} />
           ),
-          table: ({ children, ...props }) => (
+          table: ({ children, ...props }: ComponentProps) => (
             <div className="overflow-x-auto my-4">
               <table className="min-w-full border border-gray-300" {...props}>{children}</table>
             </div>
           ),
-          th: ({ children, ...props }) => (
+          th: ({ children, ...props }: ComponentProps) => (
             <th className="bg-gray-100 border border-gray-300 px-4 py-2 text-left" {...props}>{children}</th>
           ),
-          td: ({ children, ...props }) => (
+          td: ({ children, ...props }: ComponentProps) => (
             <td className="border border-gray-300 px-4 py-2" {...props}>{children}</td>
           ),
-          hr: ({ ...props }) => (
+          hr: ({ ...props }: ComponentProps) => (
             <hr className="my-6 border-t border-gray-300" {...props} />
           )
         }}
