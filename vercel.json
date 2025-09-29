@@ -4,14 +4,8 @@
   "outputDirectory": ".next",
   "installCommand": "npm install",
   "env": {
-    "ENABLE_SYNC": {
-      "description": "Enable multi-device synchronization"
-    },
-    "ACCESS_CODES": {
-      "description": "Comma-separated list of access codes for multiple users"
-    },
-    "ACCESS_CODE": {
-      "description": "Single access code for authentication (legacy)"
-    }
+    "ENABLE_SYNC": "true",
+    "ACCESS_CODES": "123456,654321,111111",
+    "ACCESS_CODE": "123456"
   }
 }
