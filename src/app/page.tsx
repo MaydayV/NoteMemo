@@ -15,10 +15,7 @@ import {
   createNote, 
   updateNote, 
   deleteNote,
-  saveCategories,
-  createCategory,
-  updateCategory,
-  deleteCategory
+  saveCategories
 } from '@/lib/notes';
 import { setAuthenticated } from '@/lib/auth';
 

@@ -25,7 +25,7 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          code({ node, inline, className, children, ...props }: any) {
+          code: ({ node, inline, className, children, ...props }) => {
             const match = /language-(\w+)/.exec(className || '');
             const language = match ? match[1] : '';
             
@@ -47,34 +47,35 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
             );
           },
           // 增强其他Markdown元素的样式
-          h1: ({ node, ...props }) => <h1 className="text-2xl font-bold mt-6 mb-4" {...props} />,
-          h2: ({ node, ...props }) => <h2 className="text-xl font-bold mt-5 mb-3" {...props} />,
-          h3: ({ node, ...props }) => <h3 className="text-lg font-bold mt-4 mb-2" {...props} />,
-          p: ({ node, ...props }) => <p className="my-3" {...props} />,
-          ul: ({ node, ...props }) => <ul className="list-disc pl-6 my-3" {...props} />,
-          ol: ({ node, ...props }) => <ol className="list-decimal pl-6 my-3" {...props} />,
-          li: ({ node, ...props }) => <li className="my-1" {...props} />,
-          blockquote: ({ node, ...props }) => (
-            <blockquote className="border-l-4 border-gray-300 pl-4 py-1 italic my-4 text-gray-700" {...props} />
+          h1: ({ children, ...props }) => <h1 className="text-2xl font-bold mt-6 mb-4" {...props}>{children}</h1>,
+          h2: ({ children, ...props }) => <h2 className="text-xl font-bold mt-5 mb-3" {...props}>{children}</h2>,
+          h3: ({ children, ...props }) => <h3 className="text-lg font-bold mt-4 mb-2" {...props}>{children}</h3>,
+          p: ({ children, ...props }) => <p className="my-3" {...props}>{children}</p>,
+          ul: ({ children, ...props }) => <ul className="list-disc pl-6 my-3" {...props}>{children}</ul>,
+          ol: ({ children, ...props }) => <ol className="list-decimal pl-6 my-3" {...props}>{children}</ol>,
+          li: ({ children, ...props }) => <li className="my-1" {...props}>{children}</li>,
+          blockquote: ({ children, ...props }) => (
+            <blockquote className="border-l-4 border-gray-300 pl-4 py-1 italic my-4 text-gray-700" {...props}>{children}</blockquote>
           ),
-          a: ({ node, ...props }) => (
-            <a className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />
+          a: ({ children, ...props }) => (
+            <a className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer" {...props}>{children}</a>
           ),
-          img: ({ node, ...props }) => (
-            <img className="max-w-full h-auto rounded-md my-4" {...props} />
+          img: ({ src, alt, ...props }) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="max-w-full h-auto rounded-md my-4" src={src} alt={alt || ''} {...props} />
           ),
-          table: ({ node, ...props }) => (
+          table: ({ children, ...props }) => (
             <div className="overflow-x-auto my-4">
-              <table className="min-w-full border border-gray-300" {...props} />
+              <table className="min-w-full border border-gray-300" {...props}>{children}</table>
             </div>
           ),
-          th: ({ node, ...props }) => (
-            <th className="bg-gray-100 border border-gray-300 px-4 py-2 text-left" {...props} />
+          th: ({ children, ...props }) => (
+            <th className="bg-gray-100 border border-gray-300 px-4 py-2 text-left" {...props}>{children}</th>
           ),
-          td: ({ node, ...props }) => (
-            <td className="border border-gray-300 px-4 py-2" {...props} />
+          td: ({ children, ...props }) => (
+            <td className="border border-gray-300 px-4 py-2" {...props}>{children}</td>
           ),
-          hr: ({ node, ...props }) => (
+          hr: ({ ...props }) => (
             <hr className="my-6 border-t border-gray-300" {...props} />
           )
         }}
