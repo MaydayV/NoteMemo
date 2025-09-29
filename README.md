@@ -25,6 +25,7 @@
 - ✅ **响应式设计** - 适配各种设备屏幕
 - ✅ **键盘快捷键** - Cmd/Ctrl + K 快速聚焦搜索
 - ✅ **PWA 支持** - 支持添加到主屏幕，离线访问
+- ✅ **多设备同步** - 可选启用Vercel KV存储实现多设备同步
 
 ## 快速开始
 
@@ -72,6 +73,35 @@ npm run dev
 
 4. 部署完成！
 
+### 启用多设备同步（可选）
+
+NoteMemo默认使用浏览器本地存储保存笔记数据。如需在多设备间同步笔记，可以启用Vercel KV存储：
+
+1. 在Vercel控制台创建KV数据库：
+   - 登录Vercel控制台
+   - 进入项目 → Storage → Create → KV Database
+   - 按提示完成创建
+
+2. 连接KV数据库到项目：
+   - 创建完成后，Vercel会自动为项目添加以下环境变量：
+     - `KV_URL`
+     - `KV_REST_API_URL`
+     - `KV_REST_API_TOKEN`
+     - `KV_REST_API_READ_ONLY_TOKEN`
+
+3. 重新部署项目
+
+4. 在应用界面中启用同步：
+   - 登录应用
+   - 在搜索框下方找到"多设备同步"开关
+   - 点击开关启用同步
+   - 输入用户ID（用于区分不同用户的数据）
+   - 确认启用
+
+5. 在其他设备上使用相同的用户ID可同步笔记数据
+
+> **注意**：多设备同步功能需要Vercel KV存储支持，这是一项付费服务，但有免费额度可供小型应用使用。
+
 ## 技术栈
 
 - **框架**: Next.js 15 (App Router)
@@ -80,6 +110,7 @@ npm run dev
 - **构建工具**: Turbopack
 - **部署**: Vercel
 - **PWA**: next-pwa
+- **存储**: 本地存储 + Vercel KV（可选）
 
 ## 项目结构
 
@@ -98,10 +129,12 @@ src/
 │   ├── NoteForm.tsx       # 笔记编辑表单
 │   ├── CategoryModal.tsx  # 分类管理模态框
 │   ├── MarkdownRenderer.tsx # Markdown 渲染组件
+│   ├── SyncToggle.tsx     # 同步功能开关组件
 │   └── PWAInitializer.tsx # PWA 初始化组件
 ├── lib/
 │   ├── auth.ts           # 认证工具函数
-│   └── notes.ts          # 笔记数据处理
+│   ├── notes.ts          # 笔记数据处理
+│   └── settings.ts       # 应用设置管理
 └── types/
     ├── note.ts           # 笔记相关类型定义
     └── next-pwa.d.ts     # PWA 类型声明
@@ -134,6 +167,12 @@ src/
 
 你可以通过分类管理功能添加、编辑或删除分类。
 
+### 多设备同步
+
+- 默认情况下，笔记存储在本地浏览器中
+- 可选启用Vercel KV存储实现多设备同步
+- 使用相同用户ID可在不同设备间同步笔记
+
 ### 示例笔记
 
 项目包含了一些示例笔记，包括：
@@ -147,6 +186,10 @@ src/
 | 变量名 | 说明 | 示例 |
 |--------|------|------|
 | `ACCESS_CODE` | 6位数字访问码，用于登录验证 | `123456` |
+| `KV_URL` | Vercel KV数据库URL（可选） | `redis://...` |
+| `KV_REST_API_URL` | Vercel KV REST API URL（可选） | `https://...` |
+| `KV_REST_API_TOKEN` | Vercel KV API令牌（可选） | `vercel_kv_...` |
+| `KV_REST_API_READ_ONLY_TOKEN` | Vercel KV只读令牌（可选） | `vercel_kv_...` |
 
 > **注意**：在 Vercel 部署时，请直接在 Vercel 界面中添加环境变量，不要使用引用语法（如 `@access_code`）
 

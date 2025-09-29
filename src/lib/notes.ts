@@ -1,4 +1,6 @@
 import { Note, NoteCategory } from '@/types/note';
+import { kv } from '@vercel/kv';
+import { isSyncEnabled, getSyncKey } from './settings';
 
 // 默认笔记分类
 export const defaultCategories: NoteCategory[] = [
@@ -252,7 +254,42 @@ const NOTES_STORAGE_KEY = 'note-memo-notes';
 const CATEGORIES_STORAGE_KEY = 'note-memo-categories';
 
 // 获取所有笔记
-export function getNotes(): Note[] {
+export async function getNotes(): Promise<Note[]> {
+  // 检查是否启用同步
+  const syncEnabled = isSyncEnabled();
+  
+  if (syncEnabled) {
+    try {
+      // 尝试从KV获取笔记
+      const accessCode = process.env.NEXT_PUBLIC_ACCESS_CODE || process.env.ACCESS_CODE || '';
+      const key = getSyncKey(accessCode);
+      const notes = await kv.get<Note[]>(key);
+      
+      if (notes && notes.length > 0) {
+        // 如果KV中有数据，返回KV数据
+        return notes;
+      }
+      
+      // 如果KV中没有数据，使用本地数据
+      const localNotes = getLocalNotes();
+      
+      // 将本地数据同步到KV
+      await saveNotesToKV(localNotes);
+      
+      return localNotes;
+    } catch (error) {
+      console.error('Error loading notes from KV:', error);
+      // 如果从KV获取失败，回退到本地存储
+      return getLocalNotes();
+    }
+  } else {
+    // 未启用同步，使用本地存储
+    return getLocalNotes();
+  }
+}
+
+// 从本地存储获取笔记
+function getLocalNotes(): Note[] {
   if (typeof window === 'undefined') return sampleNotes;
 
   try {
@@ -261,27 +298,90 @@ export function getNotes(): Note[] {
       return JSON.parse(stored);
     }
     // 如果没有存储的数据，使用示例数据并保存
-    saveNotes(sampleNotes);
+    saveNotesToLocal(sampleNotes);
     return sampleNotes;
   } catch (error) {
-    console.error('Error loading notes:', error);
+    console.error('Error loading notes from local storage:', error);
     return sampleNotes;
   }
 }
 
-// 保存笔记
-export function saveNotes(notes: Note[]): void {
+// 保存笔记到KV
+async function saveNotesToKV(notes: Note[]): Promise<void> {
+  try {
+    const accessCode = process.env.NEXT_PUBLIC_ACCESS_CODE || process.env.ACCESS_CODE || '';
+    const key = getSyncKey(accessCode);
+    await kv.set(key, notes);
+  } catch (error) {
+    console.error('Error saving notes to KV:', error);
+    throw error;
+  }
+}
+
+// 保存笔记到本地
+function saveNotesToLocal(notes: Note[]): void {
   if (typeof window === 'undefined') return;
 
   try {
     localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
   } catch (error) {
-    console.error('Error saving notes:', error);
+    console.error('Error saving notes to local storage:', error);
+  }
+}
+
+// 保存笔记
+export async function saveNotes(notes: Note[]): Promise<void> {
+  // 保存到本地
+  saveNotesToLocal(notes);
+  
+  // 如果启用了同步，也保存到KV
+  if (isSyncEnabled()) {
+    try {
+      await saveNotesToKV(notes);
+    } catch (error) {
+      console.error('Failed to sync notes to KV:', error);
+      // 同步失败不阻止本地保存
+    }
   }
 }
 
 // 获取分类
-export function getCategories(): NoteCategory[] {
+export async function getCategories(): Promise<NoteCategory[]> {
+  // 检查是否启用同步
+  const syncEnabled = isSyncEnabled();
+  
+  if (syncEnabled) {
+    try {
+      // 尝试从KV获取分类
+      const accessCode = process.env.NEXT_PUBLIC_ACCESS_CODE || process.env.ACCESS_CODE || '';
+      const key = `categories_${getSyncKey(accessCode)}`;
+      const categories = await kv.get<NoteCategory[]>(key);
+      
+      if (categories && categories.length > 0) {
+        // 如果KV中有数据，返回KV数据
+        return categories;
+      }
+      
+      // 如果KV中没有数据，使用本地数据
+      const localCategories = getLocalCategories();
+      
+      // 将本地数据同步到KV
+      await saveCategoriesToKV(localCategories);
+      
+      return localCategories;
+    } catch (error) {
+      console.error('Error loading categories from KV:', error);
+      // 如果从KV获取失败，回退到本地存储
+      return getLocalCategories();
+    }
+  } else {
+    // 未启用同步，使用本地存储
+    return getLocalCategories();
+  }
+}
+
+// 从本地存储获取分类
+function getLocalCategories(): NoteCategory[] {
   if (typeof window === 'undefined') return defaultCategories;
 
   try {
@@ -289,22 +389,50 @@ export function getCategories(): NoteCategory[] {
     if (stored) {
       return JSON.parse(stored);
     }
-    saveCategories(defaultCategories);
+    saveCategoriesToLocal(defaultCategories);
     return defaultCategories;
   } catch (error) {
-    console.error('Error loading categories:', error);
+    console.error('Error loading categories from local storage:', error);
     return defaultCategories;
   }
 }
 
-// 保存分类
-export function saveCategories(categories: NoteCategory[]): void {
+// 保存分类到KV
+async function saveCategoriesToKV(categories: NoteCategory[]): Promise<void> {
+  try {
+    const accessCode = process.env.NEXT_PUBLIC_ACCESS_CODE || process.env.ACCESS_CODE || '';
+    const key = `categories_${getSyncKey(accessCode)}`;
+    await kv.set(key, categories);
+  } catch (error) {
+    console.error('Error saving categories to KV:', error);
+    throw error;
+  }
+}
+
+// 保存分类到本地
+function saveCategoriesToLocal(categories: NoteCategory[]): void {
   if (typeof window === 'undefined') return;
 
   try {
     localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
   } catch (error) {
-    console.error('Error saving categories:', error);
+    console.error('Error saving categories to local storage:', error);
+  }
+}
+
+// 保存分类
+export async function saveCategories(categories: NoteCategory[]): Promise<void> {
+  // 保存到本地
+  saveCategoriesToLocal(categories);
+  
+  // 如果启用了同步，也保存到KV
+  if (isSyncEnabled()) {
+    try {
+      await saveCategoriesToKV(categories);
+    } catch (error) {
+      console.error('Failed to sync categories to KV:', error);
+      // 同步失败不阻止本地保存
+    }
   }
 }
 
@@ -322,8 +450,8 @@ export function searchNotes(notes: Note[], query: string): Note[] {
 }
 
 // 全局搜索所有笔记
-export function searchAllNotes(query: string): Note[] {
-  const allNotes = getNotes();
+export async function searchAllNotes(query: string): Promise<Note[]> {
+  const allNotes = await getNotes();
   
   if (!query.trim()) return allNotes;
   
@@ -337,8 +465,8 @@ export function searchAllNotes(query: string): Note[] {
 }
 
 // 创建新笔记
-export function createNote(noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>): Note {
-  const notes = getNotes();
+export async function createNote(noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>): Promise<Note> {
+  const notes = await getNotes();
   
   const newNote: Note = {
     ...noteData,
@@ -348,14 +476,14 @@ export function createNote(noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt'
   };
   
   const updatedNotes = [newNote, ...notes];
-  saveNotes(updatedNotes);
+  await saveNotes(updatedNotes);
   
   return newNote;
 }
 
 // 更新笔记
-export function updateNote(id: string, noteData: Partial<Omit<Note, 'id' | 'createdAt'>>): Note | null {
-  const notes = getNotes();
+export async function updateNote(id: string, noteData: Partial<Omit<Note, 'id' | 'createdAt'>>): Promise<Note | null> {
+  const notes = await getNotes();
   const noteIndex = notes.findIndex(note => note.id === id);
   
   if (noteIndex === -1) return null;
@@ -367,27 +495,27 @@ export function updateNote(id: string, noteData: Partial<Omit<Note, 'id' | 'crea
   };
   
   notes[noteIndex] = updatedNote;
-  saveNotes(notes);
+  await saveNotes(notes);
   
   return updatedNote;
 }
 
 // 删除笔记
-export function deleteNote(id: string): boolean {
-  const notes = getNotes();
+export async function deleteNote(id: string): Promise<boolean> {
+  const notes = await getNotes();
   const filteredNotes = notes.filter(note => note.id !== id);
   
   if (filteredNotes.length === notes.length) {
     return false; // 没有找到要删除的笔记
   }
   
-  saveNotes(filteredNotes);
+  await saveNotes(filteredNotes);
   return true;
 }
 
 // 创建新分类
-export function createCategory(categoryData: Omit<NoteCategory, 'id'>): NoteCategory {
-  const categories = getCategories();
+export async function createCategory(categoryData: Omit<NoteCategory, 'id'>): Promise<NoteCategory> {
+  const categories = await getCategories();
   
   const newCategory: NoteCategory = {
     ...categoryData,
@@ -395,14 +523,14 @@ export function createCategory(categoryData: Omit<NoteCategory, 'id'>): NoteCate
   };
   
   const updatedCategories = [...categories, newCategory];
-  saveCategories(updatedCategories);
+  await saveCategories(updatedCategories);
   
   return newCategory;
 }
 
 // 更新分类
-export function updateCategory(id: string, categoryData: Partial<Omit<NoteCategory, 'id'>>): NoteCategory | null {
-  const categories = getCategories();
+export async function updateCategory(id: string, categoryData: Partial<Omit<NoteCategory, 'id'>>): Promise<NoteCategory | null> {
+  const categories = await getCategories();
   const categoryIndex = categories.findIndex(category => category.id === id);
   
   if (categoryIndex === -1) return null;
@@ -413,21 +541,21 @@ export function updateCategory(id: string, categoryData: Partial<Omit<NoteCatego
   };
   
   categories[categoryIndex] = updatedCategory;
-  saveCategories(categories);
+  await saveCategories(categories);
   
   // 如果修改了分类名称，同时更新所有使用该分类的笔记
   if (categoryData.name && categoryData.name !== categories[categoryIndex].name) {
     const oldName = categories[categoryIndex].name;
     const newName = categoryData.name;
-    updateNotesCategory(oldName, newName);
+    await updateNotesCategory(oldName, newName);
   }
   
   return updatedCategory;
 }
 
 // 删除分类
-export function deleteCategory(id: string): boolean {
-  const categories = getCategories();
+export async function deleteCategory(id: string): Promise<boolean> {
+  const categories = await getCategories();
   const categoryToDelete = categories.find(category => category.id === id);
   
   if (!categoryToDelete) return false;
@@ -441,17 +569,17 @@ export function deleteCategory(id: string): boolean {
     return false; // 没有找到要删除的分类
   }
   
-  saveCategories(filteredCategories);
+  await saveCategories(filteredCategories);
   
   // 将使用已删除分类的笔记移动到"其他"分类
-  moveNotesToOtherCategory(categoryToDelete.name);
+  await moveNotesToOtherCategory(categoryToDelete.name);
   
   return true;
 }
 
 // 将使用已删除分类的笔记移动到"其他"分类
-function moveNotesToOtherCategory(categoryName: string): void {
-  const notes = getNotes();
+async function moveNotesToOtherCategory(categoryName: string): Promise<void> {
+  const notes = await getNotes();
   const updatedNotes = notes.map(note => {
     if (note.category === categoryName) {
       return { ...note, category: '其他', updatedAt: new Date().toISOString() };
@@ -459,12 +587,12 @@ function moveNotesToOtherCategory(categoryName: string): void {
     return note;
   });
   
-  saveNotes(updatedNotes);
+  await saveNotes(updatedNotes);
 }
 
 // 更新笔记的分类名称
-function updateNotesCategory(oldCategoryName: string, newCategoryName: string): void {
-  const notes = getNotes();
+async function updateNotesCategory(oldCategoryName: string, newCategoryName: string): Promise<void> {
+  const notes = await getNotes();
   const updatedNotes = notes.map(note => {
     if (note.category === oldCategoryName) {
       return { ...note, category: newCategoryName, updatedAt: new Date().toISOString() };
@@ -472,5 +600,5 @@ function updateNotesCategory(oldCategoryName: string, newCategoryName: string): 
     return note;
   });
   
-  saveNotes(updatedNotes);
+  await saveNotes(updatedNotes);
 }
