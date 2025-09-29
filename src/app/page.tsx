@@ -211,20 +211,20 @@ export default function Home() {
 
           <main className="flex-1">
             <div className="mb-6">
-              <div className="mb-4">
-                <SearchBar 
-                  value={searchQuery} 
-                  onChange={setSearchQuery} 
-                  placeholder="搜索笔记..."
-                />
-                <SyncToggle />
-              </div>
-              <div className="flex justify-between mt-4 md:mt-0">
-                <h2 className="text-xl font-bold">
-                  {selectedCategory === '全部' ? '所有笔记' : selectedCategory}
-                </h2>
-                <span className="text-gray-500">{filteredNotes.length} 条笔记</span>
-              </div>
+              <SearchBar 
+                value={searchQuery} 
+                onChange={setSearchQuery} 
+                placeholder="搜索笔记..."
+              />
+            </div>
+            
+            <SyncToggle />
+            
+            <div className="flex justify-between items-center mt-4">
+              <h2 className="text-xl font-bold">
+                {selectedCategory === '全部' ? '所有笔记' : selectedCategory}
+              </h2>
+              <span className="text-gray-500">{filteredNotes.length} 条笔记</span>
             </div>
 
             {currentNotes.length === 0 ? (
@@ -239,7 +239,7 @@ export default function Home() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
                   {currentNotes.map((note) => (
                     <NoteCard
                       key={note.id}
@@ -291,6 +291,7 @@ export default function Home() {
         {isModalOpen && selectedNote && (
           <NoteModal
             note={selectedNote}
+            isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
             onEdit={() => handleEditNote(selectedNote)}
             onDelete={() => {
@@ -304,16 +305,18 @@ export default function Home() {
           <NoteForm
             note={editingNote}
             categories={categoryData}
+            isOpen={isFormOpen}
+            onClose={() => setIsFormOpen(false)}
             onSave={handleSaveNote}
-            onCancel={() => setIsFormOpen(false)}
           />
         )}
 
         {isCategoryModalOpen && (
           <CategoryModal
             categories={categoryData}
+            isOpen={isCategoryModalOpen}
+            onClose={() => setIsCategoryModalOpen(false)}
             onSave={handleSaveCategories}
-            onCancel={() => setIsCategoryModalOpen(false)}
           />
         )}
       </div>
