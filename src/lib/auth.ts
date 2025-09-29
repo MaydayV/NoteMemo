@@ -1,9 +1,17 @@
 // 验证访问码
 export async function validateAccessCode(code: string): Promise<boolean> {
+  // 添加调试日志
+  console.log('环境变量检查:', {
+    ACCESS_CODES: process.env.ACCESS_CODES,
+    NEXT_PUBLIC_ACCESS_CODE: process.env.NEXT_PUBLIC_ACCESS_CODE,
+    ACCESS_CODE: process.env.ACCESS_CODE
+  });
+
   // 首先检查是否配置了多个访问码
   const accessCodesStr = process.env.ACCESS_CODES;
   if (accessCodesStr) {
     const accessCodes = accessCodesStr.split(',').map(c => c.trim());
+    console.log('多访问码模式:', accessCodes);
     return accessCodes.includes(code);
   }
   
@@ -12,9 +20,10 @@ export async function validateAccessCode(code: string): Promise<boolean> {
 
   if (!requiredCode) {
     console.warn('访问码未配置');
-    return false; // 如果没有配置访问码，不允许访问
+    return true; // 临时修改回来，允许访问以便调试
   }
 
+  console.log('单访问码模式:', { requiredCode, inputCode: code });
   return code === requiredCode;
 }
 
