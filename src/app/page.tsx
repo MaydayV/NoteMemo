@@ -35,9 +35,9 @@ export default function Home() {
   const notesPerPage = 15; // 修改为每页15条笔记（5行，每行3条）
 
   useEffect(() => {
-    const loadData = () => {
-      const notesData = getNotes();
-      const categoriesData = getCategories();
+    const loadData = async () => {
+      const notesData = await getNotes();
+      const categoriesData = await getCategories();
 
       setNotes(notesData);
       setCategoryData(categoriesData);
@@ -52,7 +52,14 @@ export default function Home() {
 
     // 如果有搜索查询，使用全局搜索
     if (searchQuery) {
-      filtered = searchAllNotes(searchQuery);
+      // 这里不能直接使用异步函数的结果
+      // 我们已经在状态中存储了笔记，所以直接在这些笔记中搜索
+      filtered = notes.filter(note => 
+        note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        note.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
     }
 
     // 按分类筛选
@@ -103,19 +110,21 @@ export default function Home() {
     setIsModalOpen(false);
   };
 
-  const handleDeleteNote = (id: string) => {
-    deleteNote(id);
-    setNotes(getNotes());
+  const handleDeleteNote = async (id: string) => {
+    await deleteNote(id);
+    const updatedNotes = await getNotes();
+    setNotes(updatedNotes);
   };
 
-  const handleSaveNote = (noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleSaveNote = async (noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => {
     if (editingNote) {
-      updateNote(editingNote.id, noteData);
+      await updateNote(editingNote.id, noteData);
     } else {
-      createNote(noteData);
+      await createNote(noteData);
     }
     
-    setNotes(getNotes());
+    const updatedNotes = await getNotes();
+    setNotes(updatedNotes);
     setIsFormOpen(false);
   };
 
