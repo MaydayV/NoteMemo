@@ -344,7 +344,7 @@ export default function Home() {
         {/* Note Form Modal */}
         <NoteForm
           note={editingNote}
-          categories={getCategories()}
+          categories={categoryData}
           isOpen={isFormOpen}
           onClose={() => setIsFormOpen(false)}
           onSave={handleSaveNote}

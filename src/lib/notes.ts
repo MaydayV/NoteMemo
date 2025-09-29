@@ -1,14 +1,4 @@
 import { Note, NoteCategory } from '@/types/note';
-import { 
-  connectToDatabase, 
-  getUserId, 
-  getNotesCollection, 
-  getCategoriesCollection,
-  updateSyncInfo,
-  getLastSyncTime,
-  getRecentlyUpdatedNotes,
-  getRecentlyUpdatedCategories
-} from './db';
 import { getCurrentAccessCode } from './auth';
 
 // 默认笔记分类
@@ -268,14 +258,6 @@ function isSyncEnabled(): boolean {
   return process.env.ENABLE_SYNC === 'true';
 }
 
-// 获取当前用户ID
-async function getCurrentUserId(): Promise<string | null> {
-  const accessCode = getCurrentAccessCode();
-  if (!accessCode) return null;
-  
-  return await getUserId(accessCode);
-}
-
 // 保存最后同步时间到本地
 function saveLastSyncTime(time: string): void {
   if (typeof window === 'undefined') return;
@@ -290,28 +272,35 @@ function getLocalLastSyncTime(): string | null {
 
 // 获取所有笔记
 export async function getNotes(): Promise<Note[]> {
-  // 如果启用了同步且在客户端环境
-  if (isSyncEnabled() && typeof window !== 'undefined') {
+  // 如果在服务器端，返回示例笔记
+  if (typeof window === 'undefined') return sampleNotes;
+  
+  // 如果启用了同步
+  if (isSyncEnabled()) {
     try {
-      const userId = await getCurrentUserId();
-      if (!userId) return getLocalNotes();
+      const accessCode = getCurrentAccessCode();
+      if (!accessCode) return getLocalNotes();
       
       // 获取本地笔记
       const localNotes = getLocalNotes();
       
       // 获取最后同步时间
-      let lastSyncTime = await getLastSyncTime(userId);
       const localLastSyncTime = getLocalLastSyncTime();
       
-      // 如果没有服务器同步时间，但有本地同步时间，使用本地时间
-      if (!lastSyncTime && localLastSyncTime) {
-        lastSyncTime = localLastSyncTime;
-      }
-      
       // 如果有最后同步时间，获取自那时以来的更新
-      if (lastSyncTime) {
-        // 获取服务器上最近更新的笔记
-        const recentNotes = await getRecentlyUpdatedNotes(userId, lastSyncTime);
+      if (localLastSyncTime) {
+        // 从服务器获取最近更新的笔记
+        const response = await fetch(`/api/notes?since=${encodeURIComponent(localLastSyncTime)}`, {
+          headers: {
+            'x-access-code': accessCode
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`服务器响应错误: ${response.status}`);
+        }
+        
+        const recentNotes: Note[] = await response.json();
         
         if (recentNotes.length > 0) {
           // 合并本地和服务器笔记，以服务器为准（更新时间较新的优先）
@@ -321,33 +310,46 @@ export async function getNotes(): Promise<Note[]> {
           saveLocalNotes(mergedNotes);
           
           // 将合并后的笔记同步回服务器
-          await syncNotesToDb(mergedNotes, userId);
+          await syncNotesToServer(mergedNotes);
           
-          // 更新同步时间
-          const now = new Date().toISOString();
-          await updateSyncInfo(userId);
-          saveLastSyncTime(now);
+          return mergedNotes;
+        }
+      } else {
+        // 如果没有最后同步时间，从服务器获取所有笔记
+        const response = await fetch('/api/notes', {
+          headers: {
+            'x-access-code': accessCode
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`服务器响应错误: ${response.status}`);
+        }
+        
+        const serverNotes: Note[] = await response.json();
+        
+        if (serverNotes.length > 0) {
+          // 合并本地和服务器笔记，以服务器为准
+          const mergedNotes = mergeNotes(localNotes, serverNotes);
+          
+          // 更新本地存储
+          saveLocalNotes(mergedNotes);
           
           return mergedNotes;
         }
       }
       
-      // 如果没有最后同步时间或没有最近更新，使用本地笔记并同步到数据库
-      await syncNotesToDb(localNotes, userId);
-      
-      // 更新同步时间
-      const now = new Date().toISOString();
-      await updateSyncInfo(userId);
-      saveLastSyncTime(now);
+      // 如果没有从服务器获取到笔记，同步本地笔记到服务器
+      await syncNotesToServer(localNotes);
       
       return localNotes;
     } catch (error) {
-      console.error('从数据库获取笔记失败:', error);
+      console.error('从服务器获取笔记失败:', error);
       return getLocalNotes();
     }
   }
   
-  // 如果未启用同步或在服务器端，使用本地存储
+  // 如果未启用同步，使用本地存储
   return getLocalNotes();
 }
 
@@ -405,34 +407,35 @@ function saveLocalNotes(notes: Note[]): void {
   }
 }
 
-// 同步笔记到数据库
-async function syncNotesToDb(notes: Note[], userId: string): Promise<void> {
-  if (!isSyncEnabled()) return;
+// 同步笔记到服务器
+async function syncNotesToServer(notes: Note[]): Promise<void> {
+  if (!isSyncEnabled() || typeof window === 'undefined') return;
+  
+  const accessCode = getCurrentAccessCode();
+  if (!accessCode) return;
   
   try {
-    const notesCollection = await getNotesCollection(userId);
-    if (!notesCollection) return;
+    const response = await fetch('/api/notes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-access-code': accessCode
+      },
+      body: JSON.stringify(notes)
+    });
     
-    // 对每个笔记进行upsert操作，而不是先删除所有笔记
-    for (const note of notes) {
-      await notesCollection.updateOne(
-        { _id: note.id },
-        {
-          $set: {
-            _id: note.id,
-            title: note.title,
-            content: note.content,
-            category: note.category,
-            tags: note.tags,
-            createdAt: note.createdAt,
-            updatedAt: note.updatedAt
-          }
-        },
-        { upsert: true }
-      );
+    if (!response.ok) {
+      throw new Error(`服务器响应错误: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    // 保存同步时间
+    if (result.syncTime) {
+      saveLastSyncTime(result.syncTime);
     }
   } catch (error) {
-    console.error('同步笔记到数据库失败:', error);
+    console.error('同步笔记到服务器失败:', error);
   }
 }
 
@@ -441,48 +444,43 @@ export async function saveNotes(notes: Note[]): Promise<void> {
   // 保存到本地存储
   saveLocalNotes(notes);
   
-  // 如果启用了同步，也保存到数据库
+  // 如果启用了同步，也保存到服务器
   if (isSyncEnabled() && typeof window !== 'undefined') {
-    try {
-      const userId = await getCurrentUserId();
-      if (userId) {
-        await syncNotesToDb(notes, userId);
-        
-        // 更新同步时间
-        const now = new Date().toISOString();
-        await updateSyncInfo(userId);
-        saveLastSyncTime(now);
-      }
-    } catch (error) {
-      console.error('保存笔记到数据库失败:', error);
-    }
+    await syncNotesToServer(notes);
   }
 }
 
 // 获取分类
 export async function getCategories(): Promise<NoteCategory[]> {
-  // 如果启用了同步且在客户端环境
-  if (isSyncEnabled() && typeof window !== 'undefined') {
+  // 如果在服务器端，返回默认分类
+  if (typeof window === 'undefined') return defaultCategories;
+  
+  // 如果启用了同步
+  if (isSyncEnabled()) {
     try {
-      const userId = await getCurrentUserId();
-      if (!userId) return getLocalCategories();
+      const accessCode = getCurrentAccessCode();
+      if (!accessCode) return getLocalCategories();
       
       // 获取本地分类
       const localCategories = getLocalCategories();
       
       // 获取最后同步时间
-      let lastSyncTime = await getLastSyncTime(userId);
       const localLastSyncTime = getLocalLastSyncTime();
       
-      // 如果没有服务器同步时间，但有本地同步时间，使用本地时间
-      if (!lastSyncTime && localLastSyncTime) {
-        lastSyncTime = localLastSyncTime;
-      }
-      
       // 如果有最后同步时间，获取自那时以来的更新
-      if (lastSyncTime) {
-        // 获取服务器上最近更新的分类
-        const recentCategories = await getRecentlyUpdatedCategories(userId, lastSyncTime);
+      if (localLastSyncTime) {
+        // 从服务器获取最近更新的分类
+        const response = await fetch(`/api/categories?since=${encodeURIComponent(localLastSyncTime)}`, {
+          headers: {
+            'x-access-code': accessCode
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`服务器响应错误: ${response.status}`);
+        }
+        
+        const recentCategories: NoteCategory[] = await response.json();
         
         if (recentCategories.length > 0) {
           // 合并本地和服务器分类，以服务器为准
@@ -492,23 +490,46 @@ export async function getCategories(): Promise<NoteCategory[]> {
           saveLocalCategories(mergedCategories);
           
           // 将合并后的分类同步回服务器
-          await syncCategoriesToDb(mergedCategories, userId);
+          await syncCategoriesToServer(mergedCategories);
+          
+          return mergedCategories;
+        }
+      } else {
+        // 如果没有最后同步时间，从服务器获取所有分类
+        const response = await fetch('/api/categories', {
+          headers: {
+            'x-access-code': accessCode
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`服务器响应错误: ${response.status}`);
+        }
+        
+        const serverCategories: NoteCategory[] = await response.json();
+        
+        if (serverCategories.length > 0) {
+          // 合并本地和服务器分类，以服务器为准
+          const mergedCategories = mergeCategories(localCategories, serverCategories);
+          
+          // 更新本地存储
+          saveLocalCategories(mergedCategories);
           
           return mergedCategories;
         }
       }
       
-      // 如果没有最后同步时间或没有最近更新，使用本地分类并同步到数据库
-      await syncCategoriesToDb(localCategories, userId);
+      // 如果没有从服务器获取到分类，同步本地分类到服务器
+      await syncCategoriesToServer(localCategories);
       
       return localCategories;
     } catch (error) {
-      console.error('从数据库获取分类失败:', error);
+      console.error('从服务器获取分类失败:', error);
       return getLocalCategories();
     }
   }
   
-  // 如果未启用同步或在服务器端，使用本地存储
+  // 如果未启用同步，使用本地存储
   return getLocalCategories();
 }
 
@@ -560,31 +581,35 @@ function saveLocalCategories(categories: NoteCategory[]): void {
   }
 }
 
-// 同步分类到数据库
-async function syncCategoriesToDb(categories: NoteCategory[], userId: string): Promise<void> {
-  if (!isSyncEnabled()) return;
+// 同步分类到服务器
+async function syncCategoriesToServer(categories: NoteCategory[]): Promise<void> {
+  if (!isSyncEnabled() || typeof window === 'undefined') return;
+  
+  const accessCode = getCurrentAccessCode();
+  if (!accessCode) return;
   
   try {
-    const categoriesCollection = await getCategoriesCollection(userId);
-    if (!categoriesCollection) return;
+    const response = await fetch('/api/categories', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-access-code': accessCode
+      },
+      body: JSON.stringify(categories)
+    });
     
-    // 对每个分类进行upsert操作，而不是先删除所有分类
-    for (const category of categories) {
-      await categoriesCollection.updateOne(
-        { _id: category.id },
-        {
-          $set: {
-            _id: category.id,
-            name: category.name,
-            description: category.description,
-            updatedAt: new Date().toISOString() // 添加更新时间用于同步
-          }
-        },
-        { upsert: true }
-      );
+    if (!response.ok) {
+      throw new Error(`服务器响应错误: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    // 保存同步时间
+    if (result.syncTime) {
+      saveLastSyncTime(result.syncTime);
     }
   } catch (error) {
-    console.error('同步分类到数据库失败:', error);
+    console.error('同步分类到服务器失败:', error);
   }
 }
 
@@ -593,21 +618,9 @@ export async function saveCategories(categories: NoteCategory[]): Promise<void> 
   // 保存到本地存储
   saveLocalCategories(categories);
   
-  // 如果启用了同步，也保存到数据库
+  // 如果启用了同步，也保存到服务器
   if (isSyncEnabled() && typeof window !== 'undefined') {
-    try {
-      const userId = await getCurrentUserId();
-      if (userId) {
-        await syncCategoriesToDb(categories, userId);
-        
-        // 更新同步时间
-        const now = new Date().toISOString();
-        await updateSyncInfo(userId);
-        saveLastSyncTime(now);
-      }
-    } catch (error) {
-      console.error('保存分类到数据库失败:', error);
-    }
+    await syncCategoriesToServer(categories);
   }
 }
 

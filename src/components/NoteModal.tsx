@@ -46,7 +46,7 @@ export default function NoteModal({ note, isOpen, onClose, onEdit, onDelete }: N
         {/* Header */}
         <div className="border-b border-gray-200 p-6 flex justify-between items-start">
           <div className="flex-1 mr-4">
-            <h2 className="text-2xl font-light text-black mb-2">{note.title}</h2>
+            <h2 className="text-2xl font-bold text-black mb-2">{note.title}</h2>
             <div className="flex items-center gap-4 text-sm text-gray-500">
               <span className="bg-gray-100 px-2 py-1 rounded">{note.category}</span>
               <span>更新于 {formatDate(note.updatedAt)}</span>

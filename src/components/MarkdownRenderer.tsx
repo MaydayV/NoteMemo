@@ -39,11 +39,42 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
             
             const code = String(children).replace(/\n$/, '');
             
+            // 不返回 CodeBlock 组件，而是直接返回 pre 和 code 元素
             return (
-              <CodeBlock 
-                language={language} 
-                value={code}
-              />
+              <pre className="rounded-md bg-gray-50 overflow-x-auto p-4 text-sm relative group">
+                <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(code);
+                      const button = document.activeElement as HTMLButtonElement;
+                      if (button) {
+                        const originalText = button.innerText;
+                        button.innerText = '已复制';
+                        setTimeout(() => {
+                          button.innerText = originalText;
+                        }, 2000);
+                      }
+                    }}
+                    className="bg-gray-700 hover:bg-gray-800 text-white text-xs px-2 py-1 rounded flex items-center"
+                    title="复制代码"
+                  >
+                    <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                    复制
+                  </button>
+                </div>
+                {language && (
+                  <div className="absolute left-2 top-2 text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">
+                    {language}
+                  </div>
+                )}
+                <div className={language ? "pt-6" : ""}>
+                  <code className={language ? `language-${language}` : ''}>
+                    {code}
+                  </code>
+                </div>
+              </pre>
             );
           },
           // 增强其他Markdown元素的样式
@@ -76,77 +107,15 @@ export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
           ),
           hr: ({ node, ...props }) => (
             <hr className="my-6 border-t border-gray-300" {...props} />
-          )
+          ),
+          // 确保 pre 不会被包裹在 p 标签内
+          pre: ({ node, ...props }) => {
+            return <>{props.children}</>;
+          }
         }}
       >
         {content}
       </ReactMarkdown>
-    </div>
-  );
-}
-
-interface CodeBlockProps {
-  language: string;
-  value: string;
-}
-
-function CodeBlock({ language, value }: CodeBlockProps) {
-  const [copied, setCopied] = useState(false);
-  
-  const handleCopy = () => {
-    navigator.clipboard.writeText(value);
-    setCopied(true);
-    
-    setTimeout(() => {
-      setCopied(false);
-    }, 2000);
-  };
-  
-  useEffect(() => {
-    // 组件挂载后高亮代码
-    const codeElements = document.querySelectorAll('pre code');
-    codeElements.forEach((block) => {
-      hljs.highlightElement(block as HTMLElement);
-    });
-  }, []);
-  
-  return (
-    <div className="relative group my-4">
-      <pre className="rounded-md bg-gray-50 overflow-x-auto p-4 text-sm">
-        <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={handleCopy}
-            className="bg-gray-700 hover:bg-gray-800 text-white text-xs px-2 py-1 rounded flex items-center"
-            title="复制代码"
-          >
-            {copied ? (
-              <>
-                <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                已复制
-              </>
-            ) : (
-              <>
-                <svg className="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                </svg>
-                复制
-              </>
-            )}
-          </button>
-        </div>
-        {language && (
-          <div className="absolute left-2 top-2 text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">
-            {language}
-          </div>
-        )}
-        <div className={language ? "pt-6" : ""}>
-          <code className={language ? `language-${language}` : ''}>
-            {value}
-          </code>
-        </div>
-      </pre>
     </div>
   );
 } 

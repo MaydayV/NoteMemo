@@ -14,6 +14,9 @@ const SYNC_INFO_COLLECTION = 'sync_info';
 let cachedClient: MongoClient | null = null;
 let cachedDb: Db | null = null;
 
+// 检查是否启用同步功能
+const isSyncEnabled = () => process.env.ENABLE_SYNC === 'true' && !!MONGODB_URI;
+
 // 同步信息接口
 export interface SyncInfo {
   userId: string;
@@ -24,7 +27,7 @@ export interface SyncInfo {
 // 连接数据库
 export async function connectToDatabase() {
   // 如果未启用同步或没有配置数据库连接字符串，则返回null
-  if (process.env.ENABLE_SYNC !== 'true' || !MONGODB_URI) {
+  if (!isSyncEnabled()) {
     return { client: null, db: null };
   }
 
@@ -35,11 +38,16 @@ export async function connectToDatabase() {
 
   try {
     // 创建新连接
-    const client = new MongoClient(MONGODB_URI);
+    const client = new MongoClient(MONGODB_URI!);
     await client.connect();
     
     // 使用Vercel的数据库连接池管理
-    attachDatabasePool(client);
+    try {
+      attachDatabasePool(client);
+    } catch (error) {
+      // 在开发环境中可能不支持Vercel的数据库连接池
+      console.warn('无法附加到Vercel数据库连接池，这在开发环境中是正常的');
+    }
     
     const db = client.db(DB_NAME);
     
@@ -56,6 +64,8 @@ export async function connectToDatabase() {
 
 // 获取用户ID（基于访问码）
 export async function getUserId(accessCode: string): Promise<string> {
+  if (!isSyncEnabled()) return accessCode; // 如果数据库未连接，使用访问码作为用户ID
+  
   const { db } = await connectToDatabase();
   if (!db) return accessCode; // 如果数据库未连接，使用访问码作为用户ID
   
@@ -98,6 +108,8 @@ export async function validateMultipleAccessCodes(code: string): Promise<boolean
 
 // 获取当前用户的笔记集合
 export async function getNotesCollection(userId: string): Promise<Collection | null> {
+  if (!isSyncEnabled()) return null;
+  
   const { db } = await connectToDatabase();
   if (!db) return null;
   
@@ -106,6 +118,8 @@ export async function getNotesCollection(userId: string): Promise<Collection | n
 
 // 获取当前用户的分类集合
 export async function getCategoriesCollection(userId: string): Promise<Collection | null> {
+  if (!isSyncEnabled()) return null;
+  
   const { db } = await connectToDatabase();
   if (!db) return null;
   
@@ -114,6 +128,8 @@ export async function getCategoriesCollection(userId: string): Promise<Collectio
 
 // 获取当前用户的同步信息集合
 export async function getSyncInfoCollection(userId: string): Promise<Collection | null> {
+  if (!isSyncEnabled()) return null;
+  
   const { db } = await connectToDatabase();
   if (!db) return null;
   
@@ -136,6 +152,8 @@ export function generateDeviceId(): string {
 
 // 更新同步信息
 export async function updateSyncInfo(userId: string): Promise<void> {
+  if (!isSyncEnabled()) return;
+  
   const syncInfoCollection = await getSyncInfoCollection(userId);
   if (!syncInfoCollection) return;
   
@@ -158,6 +176,8 @@ export async function updateSyncInfo(userId: string): Promise<void> {
 
 // 获取最后同步时间
 export async function getLastSyncTime(userId: string): Promise<string | null> {
+  if (!isSyncEnabled()) return null;
+  
   const syncInfoCollection = await getSyncInfoCollection(userId);
   if (!syncInfoCollection) return null;
   
@@ -172,6 +192,8 @@ export async function getLastSyncTime(userId: string): Promise<string | null> {
 
 // 获取所有设备的最后同步时间
 export async function getAllDevicesSyncInfo(userId: string): Promise<SyncInfo[]> {
+  if (!isSyncEnabled()) return [];
+  
   const syncInfoCollection = await getSyncInfoCollection(userId);
   if (!syncInfoCollection) return [];
   
@@ -187,6 +209,8 @@ export async function getAllDevicesSyncInfo(userId: string): Promise<SyncInfo[]>
 
 // 获取最近更新的笔记
 export async function getRecentlyUpdatedNotes(userId: string, since: string): Promise<Note[]> {
+  if (!isSyncEnabled()) return [];
+  
   const notesCollection = await getNotesCollection(userId);
   if (!notesCollection) return [];
   
@@ -209,6 +233,8 @@ export async function getRecentlyUpdatedNotes(userId: string, since: string): Pr
 
 // 获取最近更新的分类
 export async function getRecentlyUpdatedCategories(userId: string, since: string): Promise<NoteCategory[]> {
+  if (!isSyncEnabled()) return [];
+  
   const categoriesCollection = await getCategoriesCollection(userId);
   if (!categoriesCollection) return [];
   
