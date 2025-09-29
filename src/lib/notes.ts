@@ -1,7 +1,17 @@
-'use client';
-
 import { Note, NoteCategory } from '@/types/note';
-import { isSyncEnabled, getSyncUserId } from './settings';
+import { 
+  isDbSyncEnabled, 
+  getNotesFromDb, 
+  saveNotesToDb, 
+  getCategoriesFromDb, 
+  saveCategoriesToDb,
+  createNoteInDb,
+  updateNoteInDb,
+  deleteNoteFromDb,
+  createCategoryInDb,
+  updateCategoryInDb,
+  deleteCategoryFromDb
+} from './db';
 
 // 默认笔记分类
 export const defaultCategories: NoteCategory[] = [
@@ -31,7 +41,7 @@ NoteMemo是一款基于Next.js开发的极简笔记应用，采用黑白极简�
 - **Markdown支持** - 所有笔记均支持Markdown格式
 - **快速搜索** - 支持标题、内容、分类和标签搜索
 - **分类管理** - 自定义分类，轻松整理笔记
-- **本地存储** - 数据保存在浏览器本地，无需数据库
+- **数据同步** - 支持MongoDB数据库同步，跨设备访问
 - **PWA支持** - 可安装到主屏幕，支持离线使用
 
 ## 技术栈
@@ -41,6 +51,7 @@ NoteMemo是一款基于Next.js开发的极简笔记应用，采用黑白极简�
 - **样式**: Tailwind CSS
 - **构建工具**: Turbopack
 - **部署**: Vercel
+- **数据库**: MongoDB Atlas
 
 ## 开源信息
 
@@ -256,227 +267,112 @@ const CATEGORIES_STORAGE_KEY = 'note-memo-categories';
 
 // 获取所有笔记
 export async function getNotes(): Promise<Note[]> {
-  // 检查是否启用同步
-  const syncEnabled = isSyncEnabled();
-  
-  if (syncEnabled) {
-    try {
-      // 获取用户ID
-      const userId = getSyncUserId();
-      if (!userId) {
-        throw new Error('用户ID未设置');
-      }
-      
-      // 从API获取笔记
-      const response = await fetch(`/api/notes?userId=${encodeURIComponent(userId)}`);
-      
-      if (!response.ok) {
-        throw new Error(`API请求失败: ${response.status}`);
-      }
-      
-      const notes = await response.json() as Note[];
-      
-      if (notes && notes.length > 0) {
-        // 如果API中有数据，返回API数据
-        return notes;
-      }
-      
-      // 如果API中没有数据，使用本地数据
-      const localNotes = getLocalNotes();
-      
-      // 将本地数据同步到API
-      await saveNotesToAPI(localNotes, userId);
-      
-      return localNotes;
-    } catch (error) {
-      console.error('Error loading notes from API:', error);
-      // 如果从API获取失败，回退到本地存储
-      return getLocalNotes();
-    }
-  } else {
-    // 未启用同步，使用本地存储
-    return getLocalNotes();
-  }
-}
-
-// 从本地存储获取笔记
-function getLocalNotes(): Note[] {
+  // 如果在服务器端运行，直接返回示例数据
   if (typeof window === 'undefined') return sampleNotes;
 
+  // 检查是否启用数据库同步
+  if (isDbSyncEnabled()) {
+    try {
+      // 尝试从数据库获取笔记
+      const dbNotes = await getNotesFromDb();
+      if (dbNotes && dbNotes.length > 0) {
+        // 如果从数据库获取成功，同时更新本地存储
+        localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(dbNotes));
+        return dbNotes;
+      }
+    } catch (error) {
+      console.error('从数据库获取笔记失败:', error);
+      // 数据库获取失败，回退到本地存储
+    }
+  }
+
+  // 从本地存储获取笔记
   try {
     const stored = localStorage.getItem(NOTES_STORAGE_KEY);
     if (stored) {
       return JSON.parse(stored);
     }
     // 如果没有存储的数据，使用示例数据并保存
-    saveNotesToLocal(sampleNotes);
+    await saveNotes(sampleNotes);
     return sampleNotes;
   } catch (error) {
-    console.error('Error loading notes from local storage:', error);
+    console.error('Error loading notes:', error);
     return sampleNotes;
-  }
-}
-
-// 保存笔记到API
-async function saveNotesToAPI(notes: Note[], userId: string): Promise<void> {
-  try {
-    const response = await fetch('/api/notes', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ notes, userId }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API请求失败: ${response.status}`);
-    }
-  } catch (error) {
-    console.error('Error saving notes to API:', error);
-    throw error;
-  }
-}
-
-// 保存笔记到本地
-function saveNotesToLocal(notes: Note[]): void {
-  if (typeof window === 'undefined') return;
-
-  try {
-    localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
-  } catch (error) {
-    console.error('Error saving notes to local storage:', error);
   }
 }
 
 // 保存笔记
 export async function saveNotes(notes: Note[]): Promise<void> {
-  // 保存到本地
-  saveNotesToLocal(notes);
-  
-  // 如果启用了同步，也保存到API
-  if (isSyncEnabled()) {
+  if (typeof window === 'undefined') return;
+
+  // 保存到本地存储
+  try {
+    localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
+  } catch (error) {
+    console.error('Error saving notes to local storage:', error);
+  }
+
+  // 如果启用了数据库同步，也保存到数据库
+  if (isDbSyncEnabled()) {
     try {
-      const userId = getSyncUserId();
-      if (!userId) {
-        throw new Error('用户ID未设置');
-      }
-      await saveNotesToAPI(notes, userId);
+      await saveNotesToDb(notes);
     } catch (error) {
-      console.error('Failed to sync notes to API:', error);
-      // 同步失败不阻止本地保存
+      console.error('Error saving notes to database:', error);
     }
   }
 }
 
 // 获取分类
 export async function getCategories(): Promise<NoteCategory[]> {
-  // 检查是否启用同步
-  const syncEnabled = isSyncEnabled();
-  
-  if (syncEnabled) {
-    try {
-      // 获取用户ID
-      const userId = getSyncUserId();
-      if (!userId) {
-        throw new Error('用户ID未设置');
-      }
-      
-      // 从API获取分类
-      const response = await fetch(`/api/categories?userId=${encodeURIComponent(userId)}`);
-      
-      if (!response.ok) {
-        throw new Error(`API请求失败: ${response.status}`);
-      }
-      
-      const categories = await response.json() as NoteCategory[];
-      
-      if (categories && categories.length > 0) {
-        // 如果API中有数据，返回API数据
-        return categories;
-      }
-      
-      // 如果API中没有数据，使用本地数据
-      const localCategories = getLocalCategories();
-      
-      // 将本地数据同步到API
-      await saveCategoriesToAPI(localCategories, userId);
-      
-      return localCategories;
-    } catch (error) {
-      console.error('Error loading categories from API:', error);
-      // 如果从API获取失败，回退到本地存储
-      return getLocalCategories();
-    }
-  } else {
-    // 未启用同步，使用本地存储
-    return getLocalCategories();
-  }
-}
-
-// 从本地存储获取分类
-function getLocalCategories(): NoteCategory[] {
   if (typeof window === 'undefined') return defaultCategories;
 
+  // 检查是否启用数据库同步
+  if (isDbSyncEnabled()) {
+    try {
+      // 尝试从数据库获取分类
+      const dbCategories = await getCategoriesFromDb();
+      if (dbCategories && dbCategories.length > 0) {
+        // 如果从数据库获取成功，同时更新本地存储
+        localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(dbCategories));
+        return dbCategories;
+      }
+    } catch (error) {
+      console.error('从数据库获取分类失败:', error);
+      // 数据库获取失败，回退到本地存储
+    }
+  }
+
+  // 从本地存储获取分类
   try {
     const stored = localStorage.getItem(CATEGORIES_STORAGE_KEY);
     if (stored) {
       return JSON.parse(stored);
     }
-    saveCategoriesToLocal(defaultCategories);
+    await saveCategories(defaultCategories);
     return defaultCategories;
   } catch (error) {
-    console.error('Error loading categories from local storage:', error);
+    console.error('Error loading categories:', error);
     return defaultCategories;
-  }
-}
-
-// 保存分类到API
-async function saveCategoriesToAPI(categories: NoteCategory[], userId: string): Promise<void> {
-  try {
-    const response = await fetch('/api/categories', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ categories, userId }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API请求失败: ${response.status}`);
-    }
-  } catch (error) {
-    console.error('Error saving categories to API:', error);
-    throw error;
-  }
-}
-
-// 保存分类到本地
-function saveCategoriesToLocal(categories: NoteCategory[]): void {
-  if (typeof window === 'undefined') return;
-
-  try {
-    localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
-  } catch (error) {
-    console.error('Error saving categories to local storage:', error);
   }
 }
 
 // 保存分类
 export async function saveCategories(categories: NoteCategory[]): Promise<void> {
-  // 保存到本地
-  saveCategoriesToLocal(categories);
-  
-  // 如果启用了同步，也保存到API
-  if (isSyncEnabled()) {
+  if (typeof window === 'undefined') return;
+
+  // 保存到本地存储
+  try {
+    localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
+  } catch (error) {
+    console.error('Error saving categories to local storage:', error);
+  }
+
+  // 如果启用了数据库同步，也保存到数据库
+  if (isDbSyncEnabled()) {
     try {
-      const userId = getSyncUserId();
-      if (!userId) {
-        throw new Error('用户ID未设置');
-      }
-      await saveCategoriesToAPI(categories, userId);
+      await saveCategoriesToDb(categories);
     } catch (error) {
-      console.error('Failed to sync categories to API:', error);
-      // 同步失败不阻止本地保存
+      console.error('Error saving categories to database:', error);
     }
   }
 }
@@ -523,6 +419,15 @@ export async function createNote(noteData: Omit<Note, 'id' | 'createdAt' | 'upda
   const updatedNotes = [newNote, ...notes];
   await saveNotes(updatedNotes);
   
+  // 如果启用了数据库同步，单独创建笔记到数据库
+  if (isDbSyncEnabled()) {
+    try {
+      await createNoteInDb(newNote);
+    } catch (error) {
+      console.error('Error creating note in database:', error);
+    }
+  }
+  
   return newNote;
 }
 
@@ -542,6 +447,18 @@ export async function updateNote(id: string, noteData: Partial<Omit<Note, 'id' |
   notes[noteIndex] = updatedNote;
   await saveNotes(notes);
   
+  // 如果启用了数据库同步，单独更新数据库中的笔记
+  if (isDbSyncEnabled()) {
+    try {
+      await updateNoteInDb(id, {
+        ...noteData,
+        updatedAt: updatedNote.updatedAt
+      });
+    } catch (error) {
+      console.error('Error updating note in database:', error);
+    }
+  }
+  
   return updatedNote;
 }
 
@@ -555,6 +472,16 @@ export async function deleteNote(id: string): Promise<boolean> {
   }
   
   await saveNotes(filteredNotes);
+  
+  // 如果启用了数据库同步，单独从数据库中删除笔记
+  if (isDbSyncEnabled()) {
+    try {
+      await deleteNoteFromDb(id);
+    } catch (error) {
+      console.error('Error deleting note from database:', error);
+    }
+  }
+  
   return true;
 }
 
@@ -569,6 +496,15 @@ export async function createCategory(categoryData: Omit<NoteCategory, 'id'>): Pr
   
   const updatedCategories = [...categories, newCategory];
   await saveCategories(updatedCategories);
+  
+  // 如果启用了数据库同步，单独创建分类到数据库
+  if (isDbSyncEnabled()) {
+    try {
+      await createCategoryInDb(newCategory);
+    } catch (error) {
+      console.error('Error creating category in database:', error);
+    }
+  }
   
   return newCategory;
 }
@@ -587,6 +523,15 @@ export async function updateCategory(id: string, categoryData: Partial<Omit<Note
   
   categories[categoryIndex] = updatedCategory;
   await saveCategories(categories);
+  
+  // 如果启用了数据库同步，单独更新数据库中的分类
+  if (isDbSyncEnabled()) {
+    try {
+      await updateCategoryInDb(id, categoryData);
+    } catch (error) {
+      console.error('Error updating category in database:', error);
+    }
+  }
   
   // 如果修改了分类名称，同时更新所有使用该分类的笔记
   if (categoryData.name && categoryData.name !== categories[categoryIndex].name) {
@@ -615,6 +560,15 @@ export async function deleteCategory(id: string): Promise<boolean> {
   }
   
   await saveCategories(filteredCategories);
+  
+  // 如果启用了数据库同步，单独从数据库中删除分类
+  if (isDbSyncEnabled()) {
+    try {
+      await deleteCategoryFromDb(id);
+    } catch (error) {
+      console.error('Error deleting category from database:', error);
+    }
+  }
   
   // 将使用已删除分类的笔记移动到"其他"分类
   await moveNotesToOtherCategory(categoryToDelete.name);
