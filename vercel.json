@@ -2,5 +2,16 @@
   "framework": "nextjs",
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "env": {
+    "ENABLE_SYNC": {
+      "description": "Enable multi-device synchronization"
+    },
+    "ACCESS_CODES": {
+      "description": "Comma-separated list of access codes for multiple users"
+    },
+    "ACCESS_CODE": {
+      "description": "Single access code for authentication (legacy)"
+    }
+  }
 }

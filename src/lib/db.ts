@@ -28,6 +28,7 @@ export interface SyncInfo {
 export async function connectToDatabase() {
   // 如果未启用同步或没有配置数据库连接字符串，则返回null
   if (!isSyncEnabled()) {
+    console.log('同步功能未启用或未配置MongoDB URI');
     return { client: null, db: null };
   }
 
@@ -38,18 +39,34 @@ export async function connectToDatabase() {
 
   try {
     // 创建新连接
+    console.log('尝试连接到MongoDB...');
+    
+    // 打印连接字符串的部分信息（不包含敏感信息）
+    if (MONGODB_URI) {
+      const maskedURI = MONGODB_URI.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@');
+      console.log('MongoDB URI:', maskedURI);
+    } else {
+      console.error('MongoDB URI 未配置');
+      return { client: null, db: null };
+    }
+    
     const client = new MongoClient(MONGODB_URI!);
     await client.connect();
+    console.log('MongoDB连接成功');
     
     // 使用Vercel的数据库连接池管理
     try {
+      console.log('尝试附加到Vercel数据库连接池...');
       attachDatabasePool(client);
+      console.log('成功附加到Vercel数据库连接池');
     } catch (error) {
       // 在开发环境中可能不支持Vercel的数据库连接池
       console.warn('无法附加到Vercel数据库连接池，这在开发环境中是正常的');
+      console.error('附加到Vercel数据库连接池失败:', error);
     }
     
     const db = client.db(DB_NAME);
+    console.log(`成功连接到数据库: ${DB_NAME}`);
     
     // 缓存连接
     cachedClient = client;

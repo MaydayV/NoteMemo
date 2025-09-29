@@ -11,6 +11,7 @@ export default function LoginForm({ onAuthenticated }: LoginFormProps) {
   const [accessCode, setAccessCode] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,14 +25,17 @@ export default function LoginForm({ onAuthenticated }: LoginFormProps) {
     }
 
     try {
+      console.log('验证访问码:', accessCode);
       // 使用异步验证方法
       const isValid = await validateAccessCode(accessCode);
       
       if (isValid) {
+        console.log('访问码验证成功');
         // 保存访问码以便后续使用
         setAuthenticated(true, accessCode);
         onAuthenticated();
       } else {
+        console.error('访问码验证失败');
         setError('访问码错误，请重试');
         setAccessCode('');
       }
@@ -47,6 +51,10 @@ export default function LoginForm({ onAuthenticated }: LoginFormProps) {
     const formatted = formatAccessCode(e.target.value);
     setAccessCode(formatted);
     if (error) setError('');
+  };
+
+  const toggleInfo = () => {
+    setShowInfo(!showInfo);
   };
 
   return (
@@ -84,11 +92,30 @@ export default function LoginForm({ onAuthenticated }: LoginFormProps) {
           </button>
         </form>
 
-        <div className="mt-8 text-center text-xs text-gray-400">
-          <p>极简笔记备忘录</p>
-          {process.env.ENABLE_SYNC === 'true' && (
-            <p className="mt-1">多设备同步已启用</p>
-          )}
+        <div className="mt-8 flex justify-center items-center">
+          <div className="text-center">
+            <p className="text-xs text-gray-500">极简笔记备忘录</p>
+            <div className="mt-2 flex items-center justify-center">
+              <button 
+                onClick={toggleInfo}
+                className="text-gray-400 hover:text-gray-600 focus:outline-none"
+                title="显示信息"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </button>
+            </div>
+            
+            {showInfo && (
+              <div className="mt-2 p-2 bg-gray-50 rounded-md text-xs text-gray-500">
+                <p>默认访问码: 123456</p>
+                {process.env.ENABLE_SYNC === 'true' && (
+                  <p className="mt-1">多设备同步已启用</p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

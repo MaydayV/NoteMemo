@@ -1,30 +1,40 @@
 // 验证访问码
 export async function validateAccessCode(code: string): Promise<boolean> {
-  // 添加调试日志
-  console.log('环境变量检查:', {
+  console.log('验证访问码:', code);
+  console.log('环境变量:', {
     ACCESS_CODES: process.env.ACCESS_CODES,
     NEXT_PUBLIC_ACCESS_CODE: process.env.NEXT_PUBLIC_ACCESS_CODE,
     ACCESS_CODE: process.env.ACCESS_CODE
   });
 
+  // 开发环境下的默认访问码，确保本地开发时可以访问
+  const DEV_ACCESS_CODE = '123456';
+  
   // 首先检查是否配置了多个访问码
   const accessCodesStr = process.env.ACCESS_CODES;
   if (accessCodesStr) {
     const accessCodes = accessCodesStr.split(',').map(c => c.trim());
-    console.log('多访问码模式:', accessCodes);
-    return accessCodes.includes(code);
+    console.log('配置的访问码:', accessCodes);
+    const result = accessCodes.includes(code);
+    console.log('验证结果:', result);
+    return result;
   }
   
   // 兼容原来的单个访问码
   const requiredCode = process.env.NEXT_PUBLIC_ACCESS_CODE || process.env.ACCESS_CODE;
 
   if (!requiredCode) {
-    console.warn('访问码未配置');
-    return true; // 临时修改回来，允许访问以便调试
+    console.warn('访问码未配置，使用开发环境默认访问码');
+    // 如果环境变量未配置，使用默认访问码（仅在开发环境）
+    if (process.env.NODE_ENV === 'development') {
+      return code === DEV_ACCESS_CODE;
+    }
+    return false; // 在生产环境中，如果访问码未配置，不允许访问
   }
 
-  console.log('单访问码模式:', { requiredCode, inputCode: code });
-  return code === requiredCode;
+  const result = code === requiredCode;
+  console.log('单访问码验证结果:', result);
+  return result;
 }
 
 // 获取当前用户的访问码

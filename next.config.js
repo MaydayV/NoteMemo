@@ -29,6 +29,13 @@ const nextConfig = {
     }
     return config;
   },
+  // 开发环境的环境变量
+  env: {
+    ACCESS_CODE: '123456',
+    ACCESS_CODES: '123456,654321,111111',
+    ENABLE_SYNC: 'true',
+    IS_DEV: process.env.NODE_ENV === 'development' ? 'true' : 'false',
+  },
 };
 
 module.exports = nextConfig; 

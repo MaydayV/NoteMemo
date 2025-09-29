@@ -46,7 +46,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" className={`${geistSans.variable} ${geistMono.variable}`}>
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -56,7 +56,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icons/apple-icon-180x180.png" />
         <script src="/pwa.js" defer></script>
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body suppressHydrationWarning className="antialiased">
         {children}
       </body>
     </html>

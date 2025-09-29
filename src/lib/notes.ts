@@ -172,12 +172,11 @@ NoteMemo是一款基于Next.js开发的极简笔记应用，采用黑白极简�
 行内代码: \`code\`
 
 代码块:
-\`\`\`
+
 \`\`\`javascript
 function hello() {
   console.log("Hello World!");
 }
-\`\`\`
 \`\`\`
 
 ### 表格
@@ -415,6 +414,11 @@ async function syncNotesToServer(notes: Note[]): Promise<void> {
   if (!accessCode) return;
   
   try {
+    console.log('尝试同步笔记到服务器...');
+    
+    // 检查是否为开发环境
+    const isDev = process.env.IS_DEV === 'true';
+    
     const response = await fetch('/api/notes', {
       method: 'POST',
       headers: {
@@ -425,7 +429,14 @@ async function syncNotesToServer(notes: Note[]): Promise<void> {
     });
     
     if (!response.ok) {
-      throw new Error(`服务器响应错误: ${response.status}`);
+      // 在开发环境中，如果没有配置MongoDB，只记录信息而不抛出错误
+      if (isDev) {
+        console.log(`开发环境: 服务器响应错误 ${response.status}，这可能是因为未配置MongoDB。`);
+        console.log('这不会影响本地存储功能，只有多设备同步功能不可用。');
+        return;
+      } else {
+        throw new Error(`服务器响应错误: ${response.status}`);
+      }
     }
     
     const result = await response.json();
@@ -434,8 +445,15 @@ async function syncNotesToServer(notes: Note[]): Promise<void> {
     if (result.syncTime) {
       saveLastSyncTime(result.syncTime);
     }
+    
+    console.log('笔记同步成功');
   } catch (error) {
-    console.error('同步笔记到服务器失败:', error);
+    // 在开发环境中，如果是连接错误，只显示简化的消息
+    if (process.env.IS_DEV === 'true') {
+      console.log('开发环境: 同步笔记到服务器失败，这在未配置MongoDB的本地环境中是正常的。');
+    } else {
+      console.error('同步笔记到服务器失败:', error);
+    }
   }
 }
 
@@ -589,6 +607,11 @@ async function syncCategoriesToServer(categories: NoteCategory[]): Promise<void>
   if (!accessCode) return;
   
   try {
+    console.log('尝试同步分类到服务器...');
+    
+    // 检查是否为开发环境
+    const isDev = process.env.IS_DEV === 'true';
+    
     const response = await fetch('/api/categories', {
       method: 'POST',
       headers: {
@@ -599,7 +622,14 @@ async function syncCategoriesToServer(categories: NoteCategory[]): Promise<void>
     });
     
     if (!response.ok) {
-      throw new Error(`服务器响应错误: ${response.status}`);
+      // 在开发环境中，如果没有配置MongoDB，只记录信息而不抛出错误
+      if (isDev) {
+        console.log(`开发环境: 服务器响应错误 ${response.status}，这可能是因为未配置MongoDB。`);
+        console.log('这不会影响本地存储功能，只有多设备同步功能不可用。');
+        return;
+      } else {
+        throw new Error(`服务器响应错误: ${response.status}`);
+      }
     }
     
     const result = await response.json();
@@ -608,8 +638,15 @@ async function syncCategoriesToServer(categories: NoteCategory[]): Promise<void>
     if (result.syncTime) {
       saveLastSyncTime(result.syncTime);
     }
+    
+    console.log('分类同步成功');
   } catch (error) {
-    console.error('同步分类到服务器失败:', error);
+    // 在开发环境中，如果是连接错误，只显示简化的消息
+    if (process.env.IS_DEV === 'true') {
+      console.log('开发环境: 同步分类到服务器失败，这在未配置MongoDB的本地环境中是正常的。');
+    } else {
+      console.error('同步分类到服务器失败:', error);
+    }
   }
 }
 
