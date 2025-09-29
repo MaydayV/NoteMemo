@@ -12,7 +12,7 @@ export async function validateAccessCode(code: string): Promise<boolean> {
 
   if (!requiredCode) {
     console.warn('访问码未配置');
-    return true; // 如果没有配置访问码，允许访问
+    return false; // 如果没有配置访问码，不允许访问
   }
 
   return code === requiredCode;
