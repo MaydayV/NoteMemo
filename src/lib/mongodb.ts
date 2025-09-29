@@ -1,5 +1,6 @@
 import 'server-only';
 import { MongoClient, ServerApiVersion } from 'mongodb';
+import { attachDatabasePool } from '@vercel/functions';
 
 // 环境变量中的MongoDB连接字符串
 const uri = process.env.MONGODB_URI || '';
@@ -40,7 +41,13 @@ if (process.env.NODE_ENV === 'development') {
       deprecationErrors: true,
     }
   });
+  
+  // 使用Vercel的连接池管理
   clientPromise = client.connect();
+  
+  // 将MongoDB客户端附加到Vercel的连接池管理器
+  // 这可以防止无服务器环境中的连接泄漏
+  attachDatabasePool(client);
 }
 
 // 导出连接Promise，以便在其他文件中使用

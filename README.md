@@ -71,7 +71,30 @@ npm run dev
 
 ### 启用多设备同步（可选）
 
-NoteMemo默认使用浏览器本地存储保存笔记数据。如需在多设备间同步笔记，可以启用MongoDB Atlas存储：
+NoteMemo默认使用浏览器本地存储保存笔记数据。如需在多设备间同步笔记，可以启用MongoDB Atlas存储。
+
+#### 方法一：使用Vercel原生集成（推荐）
+
+1. 在Vercel控制台中添加MongoDB集成：
+   - 登录Vercel控制台，进入你的NoteMemo项目
+   - 点击"Storage"选项卡
+   - 选择"Connect Database"
+   - 选择"MongoDB Atlas"
+   - 按照向导完成MongoDB Atlas账户连接
+
+2. Vercel会自动为你的项目配置以下环境变量：
+   - `MONGODB_URI`：MongoDB连接字符串
+
+3. 重新部署项目
+
+4. 在应用界面中启用同步：
+   - 登录应用
+   - 在搜索框下方找到"多设备同步"开关
+   - 点击开关启用同步
+   - 输入用户ID（用于区分不同用户的数据）
+   - 确认启用
+
+#### 方法二：手动配置MongoDB Atlas
 
 1. 在MongoDB Atlas创建数据库：
    - 注册/登录 [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
@@ -88,14 +111,7 @@ NoteMemo默认使用浏览器本地存储保存笔记数据。如需在多设备
 
 3. 重新部署项目
 
-4. 在应用界面中启用同步：
-   - 登录应用
-   - 在搜索框下方找到"多设备同步"开关
-   - 点击开关启用同步
-   - 输入用户ID（用于区分不同用户的数据）
-   - 确认启用
-
-5. 在其他设备上使用相同的用户ID可同步笔记数据
+4. 在应用界面中启用同步功能
 
 > **注意**：MongoDB Atlas提供免费层级（M0），可存储512MB数据，足够个人笔记使用。
 
@@ -187,7 +203,7 @@ src/
 | `ACCESS_CODE` | 6位数字访问码，用于登录验证 | `123456` |
 | `MONGODB_URI` | MongoDB Atlas连接字符串（可选） | `mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/notememo?retryWrites=true&w=majority` |
 
-> **注意**：在 Vercel 部署时，请直接在 Vercel 界面中添加环境变量，不要使用引用语法（如 `@access_code`）
+> **注意**：在 Vercel 部署时，请直接在 Vercel 界面中添加环境变量，或使用Vercel的MongoDB Atlas原生集成自动配置
 
 ## 开发命令
 
@@ -224,6 +240,7 @@ NoteMemo 支持 PWA（渐进式 Web 应用）功能，允许用户将应用添�
 - **文档型数据库**：天然适合存储笔记这类半结构化数据
 - **强大的查询能力**：支持复杂查询和索引
 - **可扩展性**：随着应用增长可以轻松升级
+- **Vercel原生集成**：一键配置，无需手动设置连接字符串
 
 ### 数据安全
 
@@ -238,6 +255,14 @@ NoteMemo在MongoDB中使用两个集合：
 - `categories`：存储分类信息
 
 每条数据都包含`userId`字段，确保不同用户的数据隔离。
+
+### Vercel与MongoDB Atlas集成优化
+
+本项目使用了Vercel推荐的MongoDB连接池管理，通过`@vercel/functions`包的`attachDatabasePool`函数优化了MongoDB连接，防止在无服务器环境中出现连接泄漏问题。这确保了：
+
+- 数据库连接在函数暂停和恢复时得到妥善管理
+- 改善性能
+- 防止连接耗尽
 
 ## 许可证
 
