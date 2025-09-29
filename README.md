@@ -1,5 +1,7 @@
 # NoteMemo - 极简笔记备忘录
 
+> © 2025 [MaydayV](https://github.com/MaydayV) - 极简卡片笔记网页版
+
 一个基于 Next.js 的极简笔记备忘录应用，采用黑白极简设计风格，支持快速搜索和分类管理。
 
 ## 应用截图
@@ -63,8 +65,10 @@ npm run dev
 2. 在 [Vercel](https://vercel.com) 上导入 GitHub 仓库
 
 3. 在 Vercel 项目设置中添加环境变量：
-   - 变量名：`ACCESS_CODE`
+   - 进入项目 Settings > Environment Variables
+   - 添加变量名：`ACCESS_CODE`
    - 值：你的6位数字访问码（如：`123456`）
+   - 确保选中所有环境（Production, Preview, Development）
 
 4. 部署完成！
 
@@ -133,14 +137,18 @@ src/
 ### 示例笔记
 
 项目包含了一些示例笔记，包括：
+- NoteMemo 项目介绍
+- 笔记管理与分类方法
+- Markdown 常见写法
 - Git 常用命令
-- Next.js 部署到 Vercel
 
 ## 环境变量
 
 | 变量名 | 说明 | 示例 |
 |--------|------|------|
-| `ACCESS_CODE` | 6位数字访问码 | `123456` |
+| `ACCESS_CODE` | 6位数字访问码，用于登录验证 | `123456` |
+
+> **注意**：在 Vercel 部署时，请直接在 Vercel 界面中添加环境变量，不要使用引用语法（如 `@access_code`）
 
 ## 开发命令
 

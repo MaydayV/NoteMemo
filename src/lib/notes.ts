@@ -221,44 +221,27 @@ NoteMemo支持以上所有Markdown语法，让你的笔记更加丰富多彩！`
     content: `# Git 基本命令
 
 ## 初始化
-- git init
-- git clone <repository>
+\`\`\`bash
+git init
+git clone <repository>
+\`\`\`
 
 ## 基本操作
-- git add .
-- git commit -m "message"
-- git push origin main
-- git pull origin main
+\`\`\`bash
+git add .
+git commit -m "message"
+git push origin main
+git pull origin main
+\`\`\`
 
 ## 分支操作
-- git branch
-- git checkout -b <branch>
-- git merge <branch>`,
+\`\`\`bash
+git branch
+git checkout -b <branch>
+git merge <branch>
+\`\`\``,
     category: '命令行工具',
     tags: ['git', 'version-control'],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: '4',
-    title: 'Next.js 部署到 Vercel',
-    content: `# Next.js + Vercel 部署
-
-## 准备工作
-1. 确保项目根目录有 package.json
-2. 推送代码到 GitHub
-
-## 部署步骤
-1. 登录 Vercel
-2. 导入 GitHub 仓库
-3. 配置环境变量
-4. 部署
-
-## 环境变量设置
-- 在 Vercel Dashboard 中设置
-- 或使用 .env.local 文件`,
-    category: '软件教程',
-    tags: ['nextjs', 'vercel', 'deployment'],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   }
