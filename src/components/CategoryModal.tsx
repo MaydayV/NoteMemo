@@ -69,8 +69,29 @@ export default function CategoryModal({ isOpen, onClose, onSave, categories: ini
     onClose();
   };
 
+  // 分类排序功能
+  const moveCategory = (id: string, direction: 'up' | 'down') => {
+    const index = categories.findIndex(cat => cat.id === id);
+    if (index === -1) return;
+
+    // 不能移动第一个向上或最后一个向下
+    if ((direction === 'up' && index === 0) || 
+        (direction === 'down' && index === categories.length - 1)) {
+      return;
+    }
+
+    const newCategories = [...categories];
+    const offset = direction === 'up' ? -1 : 1;
+    
+    // 交换位置
+    [newCategories[index], newCategories[index + offset]] = 
+    [newCategories[index + offset], newCategories[index]];
+    
+    setCategories(newCategories);
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-35 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-medium mb-4">管理分类</h2>
         
@@ -106,15 +127,37 @@ export default function CategoryModal({ isOpen, onClose, onSave, categories: ini
         <div className="mb-6">
           <h3 className="text-md font-medium mb-2">现有分类</h3>
           <div className="space-y-2">
-            {categories.map(category => (
+            {categories.map((category, index) => (
               <div key={category.id} className="flex items-center justify-between border rounded-md p-3">
-                <div>
+                <div className="flex-1">
                   <div className="font-medium">{category.name}</div>
                   {category.description && (
                     <div className="text-sm text-gray-500">{category.description}</div>
                   )}
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex items-center space-x-2">
+                  <div className="flex flex-col mr-2">
+                    <button
+                      onClick={() => moveCategory(category.id, 'up')}
+                      disabled={index === 0}
+                      className={`text-gray-400 ${index !== 0 ? 'hover:text-gray-600' : ''} p-0.5`}
+                      title="上移"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => moveCategory(category.id, 'down')}
+                      disabled={index === categories.length - 1}
+                      className={`text-gray-400 ${index !== categories.length - 1 ? 'hover:text-gray-600' : ''} p-0.5`}
+                      title="下移"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
                   <button
                     onClick={() => handleEditCategory(category)}
                     className="text-gray-600 hover:text-gray-900"
@@ -141,7 +184,7 @@ export default function CategoryModal({ isOpen, onClose, onSave, categories: ini
         
         {/* 编辑分类模态框 */}
         {editingCategory && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-35 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-sm">
               <h3 className="text-lg font-medium mb-4">编辑分类</h3>
               <div className="space-y-3 mb-4">

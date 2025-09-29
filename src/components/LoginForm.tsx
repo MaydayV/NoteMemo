@@ -23,12 +23,21 @@ export default function LoginForm({ onAuthenticated }: LoginFormProps) {
       return;
     }
 
-    if (validateAccessCode(accessCode)) {
-      setAuthenticated(true);
-      onAuthenticated();
-    } else {
-      setError('访问码错误，请重试');
-      setAccessCode('');
+    try {
+      // 使用异步验证方法
+      const isValid = await validateAccessCode(accessCode);
+      
+      if (isValid) {
+        // 保存访问码以便后续使用
+        setAuthenticated(true, accessCode);
+        onAuthenticated();
+      } else {
+        setError('访问码错误，请重试');
+        setAccessCode('');
+      }
+    } catch (error) {
+      console.error('验证访问码时出错:', error);
+      setError('验证失败，请稍后再试');
     }
 
     setIsLoading(false);
@@ -77,6 +86,9 @@ export default function LoginForm({ onAuthenticated }: LoginFormProps) {
 
         <div className="mt-8 text-center text-xs text-gray-400">
           <p>极简笔记备忘录</p>
+          {process.env.ENABLE_SYNC === 'true' && (
+            <p className="mt-1">多设备同步已启用</p>
+          )}
         </div>
       </div>
     </div>

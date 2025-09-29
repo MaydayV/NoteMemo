@@ -1,5 +1,13 @@
 // 验证访问码
-export function validateAccessCode(code: string): boolean {
+export async function validateAccessCode(code: string): Promise<boolean> {
+  // 首先检查是否配置了多个访问码
+  const accessCodesStr = process.env.ACCESS_CODES;
+  if (accessCodesStr) {
+    const accessCodes = accessCodesStr.split(',').map(c => c.trim());
+    return accessCodes.includes(code);
+  }
+  
+  // 兼容原来的单个访问码
   const requiredCode = process.env.NEXT_PUBLIC_ACCESS_CODE || process.env.ACCESS_CODE;
 
   if (!requiredCode) {
@@ -8,6 +16,13 @@ export function validateAccessCode(code: string): boolean {
   }
 
   return code === requiredCode;
+}
+
+// 获取当前用户的访问码
+export function getCurrentAccessCode(): string | null {
+  if (typeof window === 'undefined') return null;
+  
+  return sessionStorage.getItem('note-memo-access-code');
 }
 
 // 检查是否已经验证过
@@ -19,13 +34,17 @@ export function isAuthenticated(): boolean {
 }
 
 // 设置验证状态
-export function setAuthenticated(status: boolean): void {
+export function setAuthenticated(status: boolean, accessCode?: string): void {
   if (typeof window === 'undefined') return;
 
   if (status) {
     sessionStorage.setItem('note-memo-auth', 'true');
+    if (accessCode) {
+      sessionStorage.setItem('note-memo-access-code', accessCode);
+    }
   } else {
     sessionStorage.removeItem('note-memo-auth');
+    sessionStorage.removeItem('note-memo-access-code');
   }
 }
 

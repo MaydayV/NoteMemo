@@ -1,6 +1,7 @@
 'use client';
 
 import { Note } from '@/types/note';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface NoteModalProps {
   note: Note | null;
@@ -24,54 +25,6 @@ export default function NoteModal({ note, isOpen, onClose, onEdit, onDelete }: N
     });
   };
 
-  const formatContent = (content: string) => {
-    return content.split('\n').map((line, index) => {
-      // 处理标题
-      if (line.startsWith('# ')) {
-        return (
-          <h1 key={index} className="text-xl font-semibold text-black mb-3 mt-6 first:mt-0">
-            {line.slice(2)}
-          </h1>
-        );
-      }
-      if (line.startsWith('## ')) {
-        return (
-          <h2 key={index} className="text-lg font-medium text-black mb-2 mt-4 first:mt-0">
-            {line.slice(3)}
-          </h2>
-        );
-      }
-      if (line.startsWith('### ')) {
-        return (
-          <h3 key={index} className="text-base font-medium text-black mb-2 mt-3 first:mt-0">
-            {line.slice(4)}
-          </h3>
-        );
-      }
-
-      // 处理代码行
-      if (line.startsWith('- ') || line.startsWith('* ')) {
-        return (
-          <div key={index} className="ml-4 mb-1">
-            <span className="text-gray-700">{line.slice(2)}</span>
-          </div>
-        );
-      }
-
-      // 处理空行
-      if (line.trim() === '') {
-        return <div key={index} className="h-3" />;
-      }
-
-      // 普通文本
-      return (
-        <p key={index} className="text-gray-700 mb-2 leading-relaxed">
-          {line}
-        </p>
-      );
-    });
-  };
-
   const handleEdit = () => {
     if (onEdit && note) {
       onEdit(note);
@@ -88,8 +41,8 @@ export default function NoteModal({ note, isOpen, onClose, onEdit, onDelete }: N
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-35 flex items-center justify-center z-50 p-4">
+      <div className="bg-white max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col rounded-lg">
         {/* Header */}
         <div className="border-b border-gray-200 p-6 flex justify-between items-start">
           <div className="flex-1 mr-4">
@@ -136,9 +89,7 @@ export default function NoteModal({ note, isOpen, onClose, onEdit, onDelete }: N
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="prose prose-sm max-w-none">
-            {formatContent(note.content)}
-          </div>
+          <MarkdownRenderer content={note.content} />
         </div>
 
         {/* Footer */}
