@@ -21,7 +21,7 @@
 - ✅ **卡片式笔记展示** - 清晰的卡片布局
 - ✅ **快速搜索功能** - 支持标题、内容、分类和标签搜索
 - ✅ **分类筛选** - 按分类快速筛选笔记
-- ✅ **数据同步** - 支持MongoDB数据库同步，跨设备访问
+- ✅ **无数据库设计** - 使用本地存储，无需配置数据库
 - ✅ **响应式设计** - 适配各种设备屏幕
 - ✅ **键盘快捷键** - Cmd/Ctrl + K 快速聚焦搜索
 - ✅ **PWA 支持** - 支持添加到主屏幕，离线访问
@@ -46,14 +46,9 @@ npm install
 cp .env.example .env.local
 ```
 
-4. 编辑 `.env.local` 文件，设置访问码和数据库配置
+4. 编辑 `.env.local` 文件，设置6位访问码
 ```env
-# 必需 - 访问码
 ACCESS_CODE=123456
-
-# 可选 - MongoDB数据库同步
-ENABLE_DB_SYNC=false
-MONGODB_URI=mongodb+srv://your-connection-string
 ```
 
 5. 启动开发服务器
@@ -73,10 +68,6 @@ npm run dev
    - 进入项目 Settings > Environment Variables
    - 添加变量名：`ACCESS_CODE`
    - 值：你的6位数字访问码（如：`123456`）
-   - 添加变量名：`ENABLE_DB_SYNC`（可选）
-   - 值：`true` 或 `false`
-   - 添加变量名：`MONGODB_URI`（如果启用数据库同步）
-   - 值：MongoDB连接字符串
    - 确保选中所有环境（Production, Preview, Development）
 
 4. 部署完成！
@@ -88,7 +79,6 @@ npm run dev
 - **样式**: Tailwind CSS
 - **构建工具**: Turbopack
 - **部署**: Vercel
-- **数据库**: MongoDB Atlas
 - **PWA**: next-pwa
 
 ## 项目结构
@@ -111,9 +101,7 @@ src/
 │   └── PWAInitializer.tsx # PWA 初始化组件
 ├── lib/
 │   ├── auth.ts           # 认证工具函数
-│   ├── notes.ts          # 笔记数据处理
-│   ├── db.ts             # 数据库操作函数
-│   └── mongodb.ts        # MongoDB连接客户端
+│   └── notes.ts          # 笔记数据处理
 └── types/
     ├── note.ts           # 笔记相关类型定义
     └── next-pwa.d.ts     # PWA 类型声明
@@ -123,32 +111,12 @@ src/
 
 ### 笔记管理
 
-笔记数据可以存储在浏览器的本地存储中或MongoDB数据库中（如果启用），包含以下信息：
+笔记数据存储在浏览器的本地存储中，包含以下信息：
 - 标题
 - 内容（支持 Markdown 格式）
 - 分类
 - 标签
 - 创建和更新时间
-
-### 数据同步
-
-NoteMemo支持两种数据存储模式：
-
-1. **本地存储模式**（默认）：
-   - 笔记数据保存在浏览器的localStorage中
-   - 数据仅在当前设备和浏览器中可用
-   - 适合个人使用或不需要跨设备访问的场景
-
-2. **数据库同步模式**：
-   - 笔记数据同步到MongoDB数据库
-   - 可以在不同设备和浏览器之间同步笔记
-   - 需要设置`ENABLE_DB_SYNC=true`和有效的`MONGODB_URI`环境变量
-
-要启用数据库同步，请按照以下步骤操作：
-
-1. 在MongoDB Atlas创建一个免费数据库
-2. 获取连接字符串
-3. 在环境变量中设置`ENABLE_DB_SYNC=true`和`MONGODB_URI=你的连接字符串`
 
 ### 搜索功能
 
@@ -176,11 +144,9 @@ NoteMemo支持两种数据存储模式：
 
 ## 环境变量
 
-| 变量名 | 说明 | 示例 | 必需 |
-|--------|------|------|------|
-| `ACCESS_CODE` | 6位数字访问码，用于登录验证 | `123456` | 是 |
-| `ENABLE_DB_SYNC` | 是否启用MongoDB数据库同步 | `true` 或 `false` | 否 |
-| `MONGODB_URI` | MongoDB连接字符串 | `mongodb+srv://...` | 仅当启用数据库同步时 |
+| 变量名 | 说明 | 示例 |
+|--------|------|------|
+| `ACCESS_CODE` | 6位数字访问码，用于登录验证 | `123456` |
 
 > **注意**：在 Vercel 部署时，请直接在 Vercel 界面中添加环境变量，不要使用引用语法（如 `@access_code`）
 

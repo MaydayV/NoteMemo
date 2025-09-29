@@ -7,7 +7,6 @@ import NoteCard from '@/components/NoteCard';
 import NoteModal from '@/components/NoteModal';
 import NoteForm from '@/components/NoteForm';
 import CategoryModal from '@/components/CategoryModal';
-import SyncToggle from '@/components/SyncToggle';
 import { Note, NoteCategory } from '@/types/note';
 import { 
   getNotes, 
@@ -36,17 +35,13 @@ export default function Home() {
   const notesPerPage = 15; // 修改为每页15条笔记（5行，每行3条）
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const notesData = await getNotes();
-        const categoriesData = await getCategories();
-        
-        setNotes(notesData);
-        setCategoryData(categoriesData);
-        setCategories(['全部', ...categoriesData.map(cat => cat.name)]);
-      } catch (error) {
-        console.error('Failed to load data:', error);
-      }
+    const loadData = () => {
+      const notesData = getNotes();
+      const categoriesData = getCategories();
+
+      setNotes(notesData);
+      setCategoryData(categoriesData);
+      setCategories(['全部', ...categoriesData.map(cat => cat.name)]);
     };
 
     loadData();
@@ -57,15 +52,7 @@ export default function Home() {
 
     // 如果有搜索查询，使用全局搜索
     if (searchQuery) {
-      // 由于searchAllNotes是异步的，我们不能在useMemo中使用await
-      // 这里直接使用本地过滤
-      const lowercaseQuery = searchQuery.toLowerCase();
-      filtered = notes.filter(note =>
-        note.title.toLowerCase().includes(lowercaseQuery) ||
-        note.content.toLowerCase().includes(lowercaseQuery) ||
-        note.category.toLowerCase().includes(lowercaseQuery) ||
-        note.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery))
-      );
+      filtered = searchAllNotes(searchQuery);
     }
 
     // 按分类筛选
@@ -74,7 +61,7 @@ export default function Home() {
     }
 
     return filtered;
-  }, [notes, searchQuery, selectedCategory]);
+  }, [notes, selectedCategory, searchQuery]);
 
   // 计算总页数
   const totalPages = Math.ceil(filteredNotes.length / notesPerPage);
@@ -116,21 +103,19 @@ export default function Home() {
     setIsModalOpen(false);
   };
 
-  const handleDeleteNote = async (id: string) => {
-    await deleteNote(id);
-    const updatedNotes = await getNotes();
-    setNotes(updatedNotes);
+  const handleDeleteNote = (id: string) => {
+    deleteNote(id);
+    setNotes(getNotes());
   };
 
-  const handleSaveNote = async (noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleSaveNote = (noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) => {
     if (editingNote) {
-      await updateNote(editingNote.id, noteData);
+      updateNote(editingNote.id, noteData);
     } else {
-      await createNote(noteData);
+      createNote(noteData);
     }
     
-    const updatedNotes = await getNotes();
-    setNotes(updatedNotes);
+    setNotes(getNotes());
     setIsFormOpen(false);
   };
 
@@ -142,183 +127,235 @@ export default function Home() {
     setIsCategoryModalOpen(true);
   };
 
-  const handleSaveCategories = async (updatedCategories: NoteCategory[]) => {
-    await saveCategories(updatedCategories);
+  const handleSaveCategories = (updatedCategories: NoteCategory[]) => {
+    saveCategories(updatedCategories);
     
-    const newCategories = await getCategories();
-    setCategoryData(newCategories);
-    setCategories(['全部', ...newCategories.map(cat => cat.name)]);
+    // 重新加载数据
+    const categoriesData = getCategories();
+    setCategoryData(categoriesData);
+    setCategories(['全部', ...categoriesData.map(cat => cat.name)]);
     
-    // 重新加载笔记以反映分类变化
-    const updatedNotes = await getNotes();
-    setNotes(updatedNotes);
-    
-    setIsCategoryModalOpen(false);
+    // 重新加载笔记（因为可能有笔记的分类被更改）
+    setNotes(getNotes());
+  };
+
+  // 分页组件
+  const Pagination = () => {
+    if (totalPages <= 1) return null;
+
+    return (
+      <div className="flex justify-center items-center space-x-2 my-8 flex-wrap">
+        <button
+          onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className={`px-3 py-1 rounded-md border ${
+            currentPage === 1
+              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+          }`}
+        >
+          上一页
+        </button>
+        
+        <div className="flex flex-wrap justify-center">
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+            <button
+              key={page}
+              onClick={() => handlePageChange(page)}
+              className={`px-3 py-1 m-1 rounded-md ${
+                currentPage === page
+                  ? 'bg-black text-white border-black'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+        </div>
+        
+        <button
+          onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages}
+          className={`px-3 py-1 rounded-md border ${
+            currentPage === totalPages
+              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+          }`}
+        >
+          下一页
+        </button>
+      </div>
+    );
   };
 
   return (
     <AuthGuard>
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">NoteMemo</h1>
-            <p className="text-gray-600">极简笔记备忘录</p>
-          </div>
-          <div className="flex mt-4 md:mt-0">
-            <button
-              onClick={handleCreateNote}
-              className="bg-black text-white px-4 py-2 rounded-md hover:bg-gray-800 transition-colors mr-2"
-            >
-              新建笔记
-            </button>
-            <button
-              onClick={handleLogout}
-              className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 transition-colors"
-            >
-              退出
-            </button>
+      <div className="min-h-screen bg-white">
+        {/* Header */}
+        <header className="border-b border-gray-200 bg-white sticky top-0 z-40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center py-4 md:h-16">
+              <div className="flex justify-between items-center">
+                <h1 className="text-xl font-light text-black">NoteMemo</h1>
+                <div className="flex md:hidden">
+                  <button 
+                    onClick={toggleSearch}
+                    className="p-2 text-gray-500"
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={handleCreateNote}
+                    className="p-2 text-gray-500"
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              
+              <div className={`mt-4 md:mt-0 md:flex md:items-center md:space-x-4 ${isSearchExpanded ? 'block' : 'hidden md:flex'}`}>
+                <div className="w-full md:w-auto mb-4 md:mb-0">
+                  <SearchBar
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    placeholder="搜索笔记..."
+                  />
+                </div>
+                <div className="flex justify-between mt-4 md:mt-0">
+                  <button
+                    onClick={handleCreateNote}
+                    className="hidden md:block px-4 py-2 bg-black text-white hover:bg-gray-800 transition-colors rounded-md"
+                  >
+                    新建笔记
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors rounded-md text-sm md:ml-4"
+                  >
+                    退出
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </header>
 
-        <div className="flex flex-col md:flex-row">
-          <aside className="w-full md:w-64 mb-6 md:mb-0 md:mr-8">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">分类</h2>
-              <button
-                onClick={handleOpenCategoryModal}
-                className="text-sm text-gray-600 hover:text-black"
-              >
-                管理
-              </button>
-            </div>
-            <ul className="space-y-2">
-              {categories.map((category) => (
-                <li key={category}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Category Filter */}
+          <div className="mb-8 overflow-x-auto">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex gap-2 pb-2 whitespace-nowrap md:flex-wrap items-center">
+                {categories.map((category) => (
                   <button
-                    className={`w-full text-left px-4 py-2 rounded-md transition-colors ${
-                      selectedCategory === category
-                        ? 'bg-black text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
+                    key={category}
                     onClick={() => setSelectedCategory(category)}
+                    className={`
+                      px-4 py-2 text-sm transition-colors border rounded-md
+                      ${selectedCategory === category
+                        ? 'bg-black text-white border-black'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                      }
+                    `}
                   >
                     {category}
                   </button>
-                </li>
-              ))}
-            </ul>
-          </aside>
-
-          <main className="flex-1">
-            <div className="mb-6">
-              <SearchBar 
-                value={searchQuery} 
-                onChange={setSearchQuery} 
-                placeholder="搜索笔记..."
-              />
-            </div>
-            
-            <SyncToggle />
-            
-            <div className="flex justify-between items-center mt-4">
-              <h2 className="text-xl font-bold">
-                {selectedCategory === '全部' ? '所有笔记' : selectedCategory}
-              </h2>
-              <span className="text-gray-500">{filteredNotes.length} 条笔记</span>
-            </div>
-
-            {currentNotes.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500">没有找到笔记</p>
-                <button
-                  onClick={handleCreateNote}
-                  className="mt-4 px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+                ))}
+                <button 
+                  onClick={handleOpenCategoryModal}
+                  className="flex items-center px-3 py-2 text-sm border border-gray-300 rounded-md text-gray-600 hover:text-black hover:border-gray-400 transition-colors"
                 >
-                  创建第一条笔记
+                  <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  管理
                 </button>
               </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-                  {currentNotes.map((note) => (
-                    <NoteCard
-                      key={note.id}
-                      note={note}
-                      onClick={() => handleNoteClick(note)}
-                    />
-                  ))}
-                </div>
+            </div>
+          </div>
 
-                {/* 分页 */}
-                {totalPages > 1 && (
-                  <div className="flex justify-center mt-8">
-                    <nav className="flex items-center">
-                      <button
-                        onClick={() => handlePageChange(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        className="px-3 py-1 border rounded-md mr-2 disabled:opacity-50"
-                      >
-                        上一页
-                      </button>
-                      {[...Array(totalPages)].map((_, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handlePageChange(i + 1)}
-                          className={`w-8 h-8 mx-1 rounded-md ${
-                            currentPage === i + 1
-                              ? 'bg-black text-white'
-                              : 'border hover:bg-gray-100'
-                          }`}
-                        >
-                          {i + 1}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => handlePageChange(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        className="px-3 py-1 border rounded-md ml-2 disabled:opacity-50"
-                      >
-                        下一页
-                      </button>
-                    </nav>
-                  </div>
-                )}
-              </>
-            )}
-          </main>
+          {/* 搜索结果计数 */}
+          {searchQuery && (
+            <div className="mb-4 text-sm text-gray-500">
+              找到 {filteredNotes.length} 条匹配的笔记
+            </div>
+          )}
+
+          {/* Notes Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+            {currentNotes.map((note) => (
+              <NoteCard
+                key={note.id}
+                note={note}
+                onClick={() => handleNoteClick(note)}
+              />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {filteredNotes.length > 0 && <Pagination />}
+
+          {/* Empty State */}
+          {filteredNotes.length === 0 && (
+            <div className="text-center py-12">
+              <div className="text-gray-400 mb-4">
+                <svg className="h-12 w-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <p className="text-gray-500">
+                {searchQuery || selectedCategory !== '全部'
+                  ? '没有找到匹配的笔记'
+                  : '暂无笔记'
+                }
+              </p>
+              <button
+                onClick={handleCreateNote}
+                className="mt-4 px-4 py-2 bg-black text-white hover:bg-gray-800 transition-colors rounded-md"
+              >
+                创建第一条笔记
+              </button>
+            </div>
+          )}
         </div>
 
-        {isModalOpen && selectedNote && (
-          <NoteModal
-            note={selectedNote}
-            isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
-            onEdit={() => handleEditNote(selectedNote)}
-            onDelete={() => {
-              handleDeleteNote(selectedNote.id);
-              setIsModalOpen(false);
-            }}
-          />
-        )}
+        {/* Note Modal */}
+        <NoteModal
+          note={selectedNote}
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onEdit={handleEditNote}
+          onDelete={handleDeleteNote}
+        />
 
-        {isFormOpen && (
-          <NoteForm
-            note={editingNote}
-            categories={categoryData}
-            isOpen={isFormOpen}
-            onClose={() => setIsFormOpen(false)}
-            onSave={handleSaveNote}
-          />
-        )}
+        {/* Note Form Modal */}
+        <NoteForm
+          note={editingNote}
+          categories={getCategories()}
+          isOpen={isFormOpen}
+          onClose={() => setIsFormOpen(false)}
+          onSave={handleSaveNote}
+        />
 
-        {isCategoryModalOpen && (
-          <CategoryModal
-            categories={categoryData}
-            isOpen={isCategoryModalOpen}
-            onClose={() => setIsCategoryModalOpen(false)}
-            onSave={handleSaveCategories}
-          />
-        )}
+        {/* Category Modal */}
+        <CategoryModal
+          categories={categoryData}
+          isOpen={isCategoryModalOpen}
+          onClose={() => setIsCategoryModalOpen(false)}
+          onSave={handleSaveCategories}
+        />
+
+        {/* Footer */}
+        <footer className="border-t border-gray-200 mt-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="text-center text-sm text-gray-400">
+              <p>NoteMemo - 极简笔记备忘录</p>
+            </div>
+          </div>
+        </footer>
       </div>
     </AuthGuard>
   );

@@ -1,17 +1,4 @@
 import { Note, NoteCategory } from '@/types/note';
-import { 
-  isDbSyncEnabled, 
-  getNotesFromDb, 
-  saveNotesToDb, 
-  getCategoriesFromDb, 
-  saveCategoriesToDb,
-  createNoteInDb,
-  updateNoteInDb,
-  deleteNoteFromDb,
-  createCategoryInDb,
-  updateCategoryInDb,
-  deleteCategoryFromDb
-} from './db';
 
 // 默认笔记分类
 export const defaultCategories: NoteCategory[] = [
@@ -41,7 +28,7 @@ NoteMemo是一款基于Next.js开发的极简笔记应用，采用黑白极简�
 - **Markdown支持** - 所有笔记均支持Markdown格式
 - **快速搜索** - 支持标题、内容、分类和标签搜索
 - **分类管理** - 自定义分类，轻松整理笔记
-- **数据同步** - 支持MongoDB数据库同步，跨设备访问
+- **本地存储** - 数据保存在浏览器本地，无需数据库
 - **PWA支持** - 可安装到主屏幕，支持离线使用
 
 ## 技术栈
@@ -51,7 +38,6 @@ NoteMemo是一款基于Next.js开发的极简笔记应用，采用黑白极简�
 - **样式**: Tailwind CSS
 - **构建工具**: Turbopack
 - **部署**: Vercel
-- **数据库**: MongoDB Atlas
 
 ## 开源信息
 
@@ -266,34 +252,16 @@ const NOTES_STORAGE_KEY = 'note-memo-notes';
 const CATEGORIES_STORAGE_KEY = 'note-memo-categories';
 
 // 获取所有笔记
-export async function getNotes(): Promise<Note[]> {
-  // 如果在服务器端运行，直接返回示例数据
+export function getNotes(): Note[] {
   if (typeof window === 'undefined') return sampleNotes;
 
-  // 检查是否启用数据库同步
-  if (isDbSyncEnabled()) {
-    try {
-      // 尝试从数据库获取笔记
-      const dbNotes = await getNotesFromDb();
-      if (dbNotes && dbNotes.length > 0) {
-        // 如果从数据库获取成功，同时更新本地存储
-        localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(dbNotes));
-        return dbNotes;
-      }
-    } catch (error) {
-      console.error('从数据库获取笔记失败:', error);
-      // 数据库获取失败，回退到本地存储
-    }
-  }
-
-  // 从本地存储获取笔记
   try {
     const stored = localStorage.getItem(NOTES_STORAGE_KEY);
     if (stored) {
       return JSON.parse(stored);
     }
     // 如果没有存储的数据，使用示例数据并保存
-    await saveNotes(sampleNotes);
+    saveNotes(sampleNotes);
     return sampleNotes;
   } catch (error) {
     console.error('Error loading notes:', error);
@@ -302,53 +270,26 @@ export async function getNotes(): Promise<Note[]> {
 }
 
 // 保存笔记
-export async function saveNotes(notes: Note[]): Promise<void> {
+export function saveNotes(notes: Note[]): void {
   if (typeof window === 'undefined') return;
 
-  // 保存到本地存储
   try {
     localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
   } catch (error) {
-    console.error('Error saving notes to local storage:', error);
-  }
-
-  // 如果启用了数据库同步，也保存到数据库
-  if (isDbSyncEnabled()) {
-    try {
-      await saveNotesToDb(notes);
-    } catch (error) {
-      console.error('Error saving notes to database:', error);
-    }
+    console.error('Error saving notes:', error);
   }
 }
 
 // 获取分类
-export async function getCategories(): Promise<NoteCategory[]> {
+export function getCategories(): NoteCategory[] {
   if (typeof window === 'undefined') return defaultCategories;
 
-  // 检查是否启用数据库同步
-  if (isDbSyncEnabled()) {
-    try {
-      // 尝试从数据库获取分类
-      const dbCategories = await getCategoriesFromDb();
-      if (dbCategories && dbCategories.length > 0) {
-        // 如果从数据库获取成功，同时更新本地存储
-        localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(dbCategories));
-        return dbCategories;
-      }
-    } catch (error) {
-      console.error('从数据库获取分类失败:', error);
-      // 数据库获取失败，回退到本地存储
-    }
-  }
-
-  // 从本地存储获取分类
   try {
     const stored = localStorage.getItem(CATEGORIES_STORAGE_KEY);
     if (stored) {
       return JSON.parse(stored);
     }
-    await saveCategories(defaultCategories);
+    saveCategories(defaultCategories);
     return defaultCategories;
   } catch (error) {
     console.error('Error loading categories:', error);
@@ -357,23 +298,13 @@ export async function getCategories(): Promise<NoteCategory[]> {
 }
 
 // 保存分类
-export async function saveCategories(categories: NoteCategory[]): Promise<void> {
+export function saveCategories(categories: NoteCategory[]): void {
   if (typeof window === 'undefined') return;
 
-  // 保存到本地存储
   try {
     localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
   } catch (error) {
-    console.error('Error saving categories to local storage:', error);
-  }
-
-  // 如果启用了数据库同步，也保存到数据库
-  if (isDbSyncEnabled()) {
-    try {
-      await saveCategoriesToDb(categories);
-    } catch (error) {
-      console.error('Error saving categories to database:', error);
-    }
+    console.error('Error saving categories:', error);
   }
 }
 
@@ -391,8 +322,8 @@ export function searchNotes(notes: Note[], query: string): Note[] {
 }
 
 // 全局搜索所有笔记
-export async function searchAllNotes(query: string): Promise<Note[]> {
-  const allNotes = await getNotes();
+export function searchAllNotes(query: string): Note[] {
+  const allNotes = getNotes();
   
   if (!query.trim()) return allNotes;
   
@@ -406,8 +337,8 @@ export async function searchAllNotes(query: string): Promise<Note[]> {
 }
 
 // 创建新笔记
-export async function createNote(noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>): Promise<Note> {
-  const notes = await getNotes();
+export function createNote(noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>): Note {
+  const notes = getNotes();
   
   const newNote: Note = {
     ...noteData,
@@ -417,23 +348,14 @@ export async function createNote(noteData: Omit<Note, 'id' | 'createdAt' | 'upda
   };
   
   const updatedNotes = [newNote, ...notes];
-  await saveNotes(updatedNotes);
-  
-  // 如果启用了数据库同步，单独创建笔记到数据库
-  if (isDbSyncEnabled()) {
-    try {
-      await createNoteInDb(newNote);
-    } catch (error) {
-      console.error('Error creating note in database:', error);
-    }
-  }
+  saveNotes(updatedNotes);
   
   return newNote;
 }
 
 // 更新笔记
-export async function updateNote(id: string, noteData: Partial<Omit<Note, 'id' | 'createdAt'>>): Promise<Note | null> {
-  const notes = await getNotes();
+export function updateNote(id: string, noteData: Partial<Omit<Note, 'id' | 'createdAt'>>): Note | null {
+  const notes = getNotes();
   const noteIndex = notes.findIndex(note => note.id === id);
   
   if (noteIndex === -1) return null;
@@ -445,49 +367,27 @@ export async function updateNote(id: string, noteData: Partial<Omit<Note, 'id' |
   };
   
   notes[noteIndex] = updatedNote;
-  await saveNotes(notes);
-  
-  // 如果启用了数据库同步，单独更新数据库中的笔记
-  if (isDbSyncEnabled()) {
-    try {
-      await updateNoteInDb(id, {
-        ...noteData,
-        updatedAt: updatedNote.updatedAt
-      });
-    } catch (error) {
-      console.error('Error updating note in database:', error);
-    }
-  }
+  saveNotes(notes);
   
   return updatedNote;
 }
 
 // 删除笔记
-export async function deleteNote(id: string): Promise<boolean> {
-  const notes = await getNotes();
+export function deleteNote(id: string): boolean {
+  const notes = getNotes();
   const filteredNotes = notes.filter(note => note.id !== id);
   
   if (filteredNotes.length === notes.length) {
     return false; // 没有找到要删除的笔记
   }
   
-  await saveNotes(filteredNotes);
-  
-  // 如果启用了数据库同步，单独从数据库中删除笔记
-  if (isDbSyncEnabled()) {
-    try {
-      await deleteNoteFromDb(id);
-    } catch (error) {
-      console.error('Error deleting note from database:', error);
-    }
-  }
-  
+  saveNotes(filteredNotes);
   return true;
 }
 
 // 创建新分类
-export async function createCategory(categoryData: Omit<NoteCategory, 'id'>): Promise<NoteCategory> {
-  const categories = await getCategories();
+export function createCategory(categoryData: Omit<NoteCategory, 'id'>): NoteCategory {
+  const categories = getCategories();
   
   const newCategory: NoteCategory = {
     ...categoryData,
@@ -495,23 +395,14 @@ export async function createCategory(categoryData: Omit<NoteCategory, 'id'>): Pr
   };
   
   const updatedCategories = [...categories, newCategory];
-  await saveCategories(updatedCategories);
-  
-  // 如果启用了数据库同步，单独创建分类到数据库
-  if (isDbSyncEnabled()) {
-    try {
-      await createCategoryInDb(newCategory);
-    } catch (error) {
-      console.error('Error creating category in database:', error);
-    }
-  }
+  saveCategories(updatedCategories);
   
   return newCategory;
 }
 
 // 更新分类
-export async function updateCategory(id: string, categoryData: Partial<Omit<NoteCategory, 'id'>>): Promise<NoteCategory | null> {
-  const categories = await getCategories();
+export function updateCategory(id: string, categoryData: Partial<Omit<NoteCategory, 'id'>>): NoteCategory | null {
+  const categories = getCategories();
   const categoryIndex = categories.findIndex(category => category.id === id);
   
   if (categoryIndex === -1) return null;
@@ -522,30 +413,21 @@ export async function updateCategory(id: string, categoryData: Partial<Omit<Note
   };
   
   categories[categoryIndex] = updatedCategory;
-  await saveCategories(categories);
-  
-  // 如果启用了数据库同步，单独更新数据库中的分类
-  if (isDbSyncEnabled()) {
-    try {
-      await updateCategoryInDb(id, categoryData);
-    } catch (error) {
-      console.error('Error updating category in database:', error);
-    }
-  }
+  saveCategories(categories);
   
   // 如果修改了分类名称，同时更新所有使用该分类的笔记
   if (categoryData.name && categoryData.name !== categories[categoryIndex].name) {
     const oldName = categories[categoryIndex].name;
     const newName = categoryData.name;
-    await updateNotesCategory(oldName, newName);
+    updateNotesCategory(oldName, newName);
   }
   
   return updatedCategory;
 }
 
 // 删除分类
-export async function deleteCategory(id: string): Promise<boolean> {
-  const categories = await getCategories();
+export function deleteCategory(id: string): boolean {
+  const categories = getCategories();
   const categoryToDelete = categories.find(category => category.id === id);
   
   if (!categoryToDelete) return false;
@@ -559,26 +441,17 @@ export async function deleteCategory(id: string): Promise<boolean> {
     return false; // 没有找到要删除的分类
   }
   
-  await saveCategories(filteredCategories);
-  
-  // 如果启用了数据库同步，单独从数据库中删除分类
-  if (isDbSyncEnabled()) {
-    try {
-      await deleteCategoryFromDb(id);
-    } catch (error) {
-      console.error('Error deleting category from database:', error);
-    }
-  }
+  saveCategories(filteredCategories);
   
   // 将使用已删除分类的笔记移动到"其他"分类
-  await moveNotesToOtherCategory(categoryToDelete.name);
+  moveNotesToOtherCategory(categoryToDelete.name);
   
   return true;
 }
 
 // 将使用已删除分类的笔记移动到"其他"分类
-async function moveNotesToOtherCategory(categoryName: string): Promise<void> {
-  const notes = await getNotes();
+function moveNotesToOtherCategory(categoryName: string): void {
+  const notes = getNotes();
   const updatedNotes = notes.map(note => {
     if (note.category === categoryName) {
       return { ...note, category: '其他', updatedAt: new Date().toISOString() };
@@ -586,12 +459,12 @@ async function moveNotesToOtherCategory(categoryName: string): Promise<void> {
     return note;
   });
   
-  await saveNotes(updatedNotes);
+  saveNotes(updatedNotes);
 }
 
 // 更新笔记的分类名称
-async function updateNotesCategory(oldCategoryName: string, newCategoryName: string): Promise<void> {
-  const notes = await getNotes();
+function updateNotesCategory(oldCategoryName: string, newCategoryName: string): void {
+  const notes = getNotes();
   const updatedNotes = notes.map(note => {
     if (note.category === oldCategoryName) {
       return { ...note, category: newCategoryName, updatedAt: new Date().toISOString() };
@@ -599,5 +472,5 @@ async function updateNotesCategory(oldCategoryName: string, newCategoryName: str
     return note;
   });
   
-  await saveNotes(updatedNotes);
+  saveNotes(updatedNotes);
 }
