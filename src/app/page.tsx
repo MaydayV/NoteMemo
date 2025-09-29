@@ -136,16 +136,17 @@ export default function Home() {
     setIsCategoryModalOpen(true);
   };
 
-  const handleSaveCategories = (updatedCategories: NoteCategory[]) => {
-    saveCategories(updatedCategories);
+  const handleSaveCategories = async (updatedCategories: NoteCategory[]) => {
+    await saveCategories(updatedCategories);
     
     // 重新加载数据
-    const categoriesData = getCategories();
+    const categoriesData = await getCategories();
     setCategoryData(categoriesData);
     setCategories(['全部', ...categoriesData.map(cat => cat.name)]);
     
     // 重新加载笔记（因为可能有笔记的分类被更改）
-    setNotes(getNotes());
+    const updatedNotes = await getNotes();
+    setNotes(updatedNotes);
   };
 
   // 分页组件
