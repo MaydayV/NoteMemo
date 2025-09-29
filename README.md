@@ -75,15 +75,16 @@ NoteMemo默认使用浏览器本地存储保存笔记数据。如需在多设备
 
 1. 在Vercel控制台创建KV数据库：
    - 登录Vercel控制台
-   - 进入项目 → Storage → Create → KV Database
-   - 按提示完成创建
+   - 进入项目 → Storage
+   - 点击"Create New" → 选择"KV"
+   - 在Marketplace数据库提供商中选择"Redis"
+   - 按照向导完成创建
 
-2. 连接KV数据库到项目：
-   - 创建完成后，Vercel会自动为项目添加以下环境变量：
-     - `KV_URL`
-     - `KV_REST_API_URL`
-     - `KV_REST_API_TOKEN`
-     - `KV_REST_API_READ_ONLY_TOKEN`
+2. 创建完成后，Vercel会自动为项目添加以下环境变量：
+   - `KV_URL`
+   - `KV_REST_API_URL`
+   - `KV_REST_API_TOKEN`
+   - `KV_REST_API_READ_ONLY_TOKEN`
 
 3. 重新部署项目
 
