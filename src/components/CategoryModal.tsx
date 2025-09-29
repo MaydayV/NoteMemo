@@ -25,6 +25,16 @@ export default function CategoryModal({ isOpen, onClose, onSave, categories: ini
   const handleAddCategory = () => {
     if (!newCategoryName.trim()) return;
 
+    // 检查是否已存在同名分类
+    const existingCategory = categories.find(
+      cat => cat.name.toLowerCase() === newCategoryName.trim().toLowerCase()
+    );
+    
+    if (existingCategory) {
+      alert(`已存在名为"${newCategoryName.trim()}"的分类`);
+      return;
+    }
+
     const newCategory: NoteCategory = {
       id: Date.now().toString(),
       name: newCategoryName.trim(),
@@ -42,6 +52,17 @@ export default function CategoryModal({ isOpen, onClose, onSave, categories: ini
 
   const handleUpdateCategory = () => {
     if (!editingCategory || !editingCategory.name.trim()) return;
+
+    // 检查是否与其他分类重名
+    const duplicateName = categories.find(
+      cat => cat.id !== editingCategory.id && 
+             cat.name.toLowerCase() === editingCategory.name.trim().toLowerCase()
+    );
+    
+    if (duplicateName) {
+      alert(`已存在名为"${editingCategory.name.trim()}"的分类`);
+      return;
+    }
 
     setCategories(
       categories.map(cat => 
@@ -93,6 +114,30 @@ export default function CategoryModal({ isOpen, onClose, onSave, categories: ini
     [newCategories[index + offset], newCategories[index]];
     
     setCategories(newCategories);
+  };
+
+  // 清理重复分类
+  const cleanupDuplicateCategories = () => {
+    // 创建一个名称到分类的映射
+    const nameMap = new Map<string, NoteCategory>();
+    
+    // 按顺序处理，如果有重名的，保留最后一个
+    categories.forEach(category => {
+      nameMap.set(category.name.toLowerCase(), category);
+    });
+    
+    // 转换回数组
+    const uniqueCategories = Array.from(nameMap.values());
+    
+    // 如果有减少，说明有重复
+    if (uniqueCategories.length < categories.length) {
+      if (confirm(`检测到${categories.length - uniqueCategories.length}个重复分类，是否清理？`)) {
+        setCategories(uniqueCategories);
+        alert('重复分类已清理');
+      }
+    } else {
+      alert('没有检测到重复分类');
+    }
   };
 
   return (
@@ -230,6 +275,13 @@ export default function CategoryModal({ isOpen, onClose, onSave, categories: ini
         
         {/* 底部按钮 */}
         <div className="flex justify-end space-x-2">
+          <button
+            onClick={cleanupDuplicateCategories}
+            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md"
+            title="清理重复的分类"
+          >
+            清理重复
+          </button>
           <button
             onClick={onClose}
             className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md"

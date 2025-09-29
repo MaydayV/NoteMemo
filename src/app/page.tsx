@@ -7,6 +7,7 @@ import NoteCard from '@/components/NoteCard';
 import NoteModal from '@/components/NoteModal';
 import NoteForm from '@/components/NoteForm';
 import CategoryModal from '@/components/CategoryModal';
+import SyncStatus from '@/components/SyncStatus';
 import { Note, NoteCategory } from '@/types/note';
 import { 
   getNotes, 
@@ -32,16 +33,24 @@ export default function Home() {
   const [editingNote, setEditingNote] = useState<Note | undefined>(undefined);
   const [currentPage, setCurrentPage] = useState(1);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // 添加加载状态
   const notesPerPage = 15; // 修改为每页15条笔记（5行，每行3条）
 
   useEffect(() => {
     const loadData = async () => {
-      const notesData = await getNotes();
-      const categoriesData = await getCategories();
+      setIsLoading(true); // 开始加载前设置加载状态
+      try {
+        const notesData = await getNotes();
+        const categoriesData = await getCategories();
 
-      setNotes(notesData);
-      setCategoryData(categoriesData);
-      setCategories(['全部', ...categoriesData.map(cat => cat.name)]);
+        setNotes(notesData);
+        setCategoryData(categoriesData);
+        setCategories(['全部', ...categoriesData.map(cat => cat.name)]);
+      } catch (error) {
+        console.error('加载数据失败:', error);
+      } finally {
+        setIsLoading(false); // 无论成功或失败，都结束加载状态
+      }
     };
 
     loadData();
@@ -296,40 +305,50 @@ export default function Home() {
 
           {/* Notes Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            {currentNotes.map((note) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                onClick={() => handleNoteClick(note)}
-              />
-            ))}
+            {isLoading ? (
+              <div className="col-span-full text-center py-12">
+                <div className="text-gray-400 mb-4">
+                  <svg className="h-12 w-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <p className="text-gray-500">加载中...</p>
+              </div>
+            ) : filteredNotes.length === 0 ? (
+              <div className="col-span-full text-center py-12">
+                <div className="text-gray-400 mb-4">
+                  <svg className="h-12 w-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <p className="text-gray-500">
+                  {searchQuery || selectedCategory !== '全部'
+                    ? '没有找到匹配的笔记'
+                    : '暂无笔记'
+                  }
+                </p>
+                <button
+                  onClick={handleCreateNote}
+                  className="mt-4 px-4 py-2 bg-black text-white hover:bg-gray-800 transition-colors rounded-md"
+                >
+                  创建第一条笔记
+                </button>
+              </div>
+            ) : (
+              currentNotes.map((note) => (
+                <NoteCard
+                  key={note.id}
+                  note={note}
+                  onClick={() => handleNoteClick(note)}
+                />
+              ))
+            )}
           </div>
 
           {/* Pagination */}
           {filteredNotes.length > 0 && <Pagination />}
 
-          {/* Empty State */}
-          {filteredNotes.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-gray-400 mb-4">
-                <svg className="h-12 w-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <p className="text-gray-500">
-                {searchQuery || selectedCategory !== '全部'
-                  ? '没有找到匹配的笔记'
-                  : '暂无笔记'
-                }
-              </p>
-              <button
-                onClick={handleCreateNote}
-                className="mt-4 px-4 py-2 bg-black text-white hover:bg-gray-800 transition-colors rounded-md"
-              >
-                创建第一条笔记
-              </button>
-            </div>
-          )}
+          {/* 删除重复的空状态提示，因为已经在Notes Grid中显示了 */}
         </div>
 
         {/* Note Modal */}
@@ -362,7 +381,15 @@ export default function Home() {
         <footer className="border-t border-gray-200 mt-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="text-center text-sm text-gray-400">
-              <p>NoteMemo - 极简笔记备忘录</p>
+              <p>
+                <a href="https://github.com/MaydayV" target="_blank" rel="noopener noreferrer" className="hover:underline">
+                  © MaydayV
+                </a> • 
+                <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener noreferrer" className="hover:underline ml-1">
+                  MIT License
+                </a>
+              </p>
+              <SyncStatus className="mt-2 justify-center" />
             </div>
           </div>
         </footer>

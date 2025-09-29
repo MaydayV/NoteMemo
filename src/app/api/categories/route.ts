@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
       
       // 转换MongoDB文档为NoteCategory对象
       const formattedCategories = categories.map(category => ({
-        id: category._id.toString(),
+        id: category.id || category._id.toString(), // 优先使用id字段，如果不存在则使用_id
         name: category.name,
         description: category.description
       }));
@@ -146,14 +146,28 @@ export async function POST(request: NextRequest) {
     const categories: NoteCategory[] = await request.json();
     console.log(`接收到 ${categories.length} 条分类进行保存`);
     
+    // 获取所有分类ID，用于后续清理
+    const categoryIds = categories.map(cat => cat.id);
+    
+    // 先进行去重处理，确保没有重名分类
+    const uniqueCategories = removeDuplicateCategories(categories);
+    console.log(`去重后剩余 ${uniqueCategories.length} 条分类`);
+    
+    // 清理数据库中所有不在当前列表中的分类（删除操作）
+    const deleteResult = await categoriesCollection.deleteMany({
+      id: { $nin: uniqueCategories.map(cat => cat.id) }
+    });
+    console.log(`已删除 ${deleteResult.deletedCount} 条旧分类`);
+    
     // 对每个分类进行upsert操作
-    for (const category of categories) {
+    for (const category of uniqueCategories) {
       console.log(`保存分类: ${category.id} - ${category.name}`);
       // 添加更新时间
       const updatedAt = new Date().toISOString();
       
       // 使用MongoDB文档格式，避免直接使用_id
       const categoryDoc = {
+        id: category.id, // 确保保存id字段
         name: category.name,
         description: category.description,
         updatedAt
@@ -184,4 +198,26 @@ export async function POST(request: NextRequest) {
       message: error instanceof Error ? error.message : '未知错误'
     }, { status: 500 });
   }
+} 
+
+// 根据分类名称去重
+function removeDuplicateCategories(categories: NoteCategory[]): NoteCategory[] {
+  const nameMap = new Map<string, NoteCategory>();
+  
+  // 按照顺序处理，如果有重名的，保留最后一个
+  categories.forEach(category => {
+    nameMap.set(category.name.toLowerCase(), category);
+  });
+  
+  // 确保"其他"分类总是存在
+  if (!nameMap.has('其他'.toLowerCase())) {
+    const otherCategory = categories.find(c => c.name === '其他') || {
+      id: 'other',
+      name: '其他',
+      description: '未分类的笔记'
+    };
+    nameMap.set('其他'.toLowerCase(), otherCategory);
+  }
+  
+  return Array.from(nameMap.values());
 } 

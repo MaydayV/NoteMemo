@@ -6,6 +6,8 @@ export interface Note {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+  deleted?: boolean; // 添加删除标记
+  deletedAt?: string; // 删除时间
 }
 
 export interface NoteCategory {

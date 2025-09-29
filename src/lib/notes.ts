@@ -274,91 +274,125 @@ export async function getNotes(): Promise<Note[]> {
   // 如果在服务器端，返回示例笔记
   if (typeof window === 'undefined') return sampleNotes;
   
+  // 首先获取本地笔记，确保有数据可显示
+  const localNotes = getLocalNotes();
+  
   // 如果启用了同步
   if (isSyncEnabled()) {
     try {
       const accessCode = getCurrentAccessCode();
-      if (!accessCode) return getLocalNotes();
+      if (!accessCode) return localNotes;
       
-      // 获取本地笔记
-      const localNotes = getLocalNotes();
-      
-      // 获取最后同步时间
-      const localLastSyncTime = getLocalLastSyncTime();
-      
-      // 如果有最后同步时间，获取自那时以来的更新
-      if (localLastSyncTime) {
-        // 从服务器获取最近更新的笔记
-        const response = await fetch(`/api/notes?since=${encodeURIComponent(localLastSyncTime)}`, {
-          headers: {
-            'x-access-code': accessCode
+      // 设置超时，确保不会无限等待
+      const syncPromise = async () => {
+        // 获取最后同步时间
+        const localLastSyncTime = getLocalLastSyncTime();
+        
+        // 如果有最后同步时间，获取自那时以来的更新
+        if (localLastSyncTime) {
+          console.log(`获取自 ${localLastSyncTime} 以来的更新`);
+          // 从服务器获取最近更新的笔记
+          const response = await fetch(`/api/notes?since=${encodeURIComponent(localLastSyncTime)}`, {
+            headers: {
+              'x-access-code': accessCode
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`服务器响应错误: ${response.status}`);
           }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`服务器响应错误: ${response.status}`);
-        }
-        
-        const recentNotes: Note[] = await response.json();
-        
-        if (recentNotes.length > 0) {
-          // 合并本地和服务器笔记，以服务器为准（更新时间较新的优先）
-          const mergedNotes = mergeNotes(localNotes, recentNotes);
           
-          // 更新本地存储
-          saveLocalNotes(mergedNotes);
+          const recentNotes: Note[] = await response.json();
+          console.log(`从服务器获取到 ${recentNotes.length} 条更新的笔记`);
           
-          // 将合并后的笔记同步回服务器
-          await syncNotesToServer(mergedNotes);
-          
-          return mergedNotes;
-        }
-      } else {
-        // 如果没有最后同步时间，从服务器获取所有笔记
-        const response = await fetch('/api/notes', {
-          headers: {
-            'x-access-code': accessCode
+          if (recentNotes.length > 0) {
+            // 确保每个笔记都有唯一ID
+            recentNotes.forEach(note => {
+              if (!note.id) {
+                console.error('服务器返回的笔记缺少ID:', note);
+              }
+            });
+            
+            // 合并本地和服务器笔记，以服务器为准（更新时间较新的优先）
+            const mergedNotes = mergeNotes(localNotes, recentNotes);
+            
+            // 更新本地存储
+            saveLocalNotes(mergedNotes);
+            
+            // 将合并后的笔记同步回服务器
+            await syncNotesToServer(mergedNotes);
+            
+            return mergedNotes;
           }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`服务器响应错误: ${response.status}`);
+        } else {
+          // 如果没有最后同步时间，从服务器获取所有笔记
+          const response = await fetch('/api/notes', {
+            headers: {
+              'x-access-code': accessCode
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`服务器响应错误: ${response.status}`);
+          }
+          
+          const serverNotes: Note[] = await response.json();
+          console.log(`从服务器获取到 ${serverNotes.length} 条笔记`);
+          
+          if (serverNotes.length > 0) {
+            // 确保每个笔记都有唯一ID
+            serverNotes.forEach(note => {
+              if (!note.id) {
+                console.error('服务器返回的笔记缺少ID:', note);
+              }
+            });
+            
+            // 合并本地和服务器笔记
+            const mergedNotes = mergeNotes(localNotes, serverNotes);
+            
+            // 更新本地存储
+            saveLocalNotes(mergedNotes);
+            
+            // 更新同步时间
+            const now = new Date().toISOString();
+            saveLastSyncTime(now);
+            
+            return mergedNotes;
+          }
         }
         
-        const serverNotes: Note[] = await response.json();
-        
-        if (serverNotes.length > 0) {
-          // 合并本地和服务器笔记，以服务器为准
-          const mergedNotes = mergeNotes(localNotes, serverNotes);
-          
-          // 更新本地存储
-          saveLocalNotes(mergedNotes);
-          
-          return mergedNotes;
-        }
-      }
+        return localNotes;
+      };
       
-      // 如果没有从服务器获取到笔记，同步本地笔记到服务器
-      await syncNotesToServer(localNotes);
+      // 设置超时，最多等待5秒
+      const timeoutPromise = new Promise<Note[]>((resolve) => {
+        setTimeout(() => {
+          console.log('同步超时，使用本地笔记');
+          resolve(localNotes);
+        }, 5000);
+      });
       
-      return localNotes;
+      // 使用Promise.race确保不会无限等待
+      return Promise.race([syncPromise(), timeoutPromise]);
     } catch (error) {
       console.error('从服务器获取笔记失败:', error);
-      return getLocalNotes();
+      // 如果同步失败，回退到本地笔记
     }
   }
   
-  // 如果未启用同步，使用本地存储
-  return getLocalNotes();
+  return localNotes;
 }
 
 // 合并笔记，处理冲突
 function mergeNotes(localNotes: Note[], serverNotes: Note[]): Note[] {
+  // 获取所有本地笔记，包括已删除的
+  const allLocalNotes = getAllLocalNotes();
+  
   // 创建一个ID到笔记的映射，方便查找
   const noteMap = new Map<string, Note>();
   
-  // 先添加所有本地笔记
-  localNotes.forEach(note => {
+  // 先添加所有本地笔记（包括已删除的）
+  allLocalNotes.forEach(note => {
     noteMap.set(note.id, note);
   });
   
@@ -368,13 +402,22 @@ function mergeNotes(localNotes: Note[], serverNotes: Note[]): Note[] {
     
     // 如果本地没有这个笔记，或者服务器笔记更新时间更晚，使用服务器笔记
     if (!localNote || new Date(serverNote.updatedAt) > new Date(localNote.updatedAt)) {
+      console.log(`使用服务器笔记: ${serverNote.id} - ${serverNote.title} ${serverNote.deleted ? '(已删除)' : ''}`);
       noteMap.set(serverNote.id, serverNote);
+    } else {
+      console.log(`保留本地笔记: ${localNote.id} - ${localNote.title} ${localNote.deleted ? '(已删除)' : ''}`);
     }
   });
   
   // 转换回数组并按更新时间排序（最新的在前）
-  return Array.from(noteMap.values())
+  const allMergedNotes = Array.from(noteMap.values())
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  
+  // 保存所有合并的笔记到本地存储
+  saveLocalNotes(allMergedNotes);
+  
+  // 返回过滤掉已删除笔记的列表
+  return allMergedNotes.filter(note => !note.deleted);
 }
 
 // 从本地存储获取笔记
@@ -384,13 +427,30 @@ function getLocalNotes(): Note[] {
   try {
     const stored = localStorage.getItem(NOTES_STORAGE_KEY);
     if (stored) {
-      return JSON.parse(stored);
+      // 获取所有笔记，但过滤掉已删除的笔记
+      const allNotes = JSON.parse(stored);
+      return allNotes.filter((note: Note) => !note.deleted);
     }
-    // 如果没有存储的数据，使用示例数据并保存
     saveLocalNotes(sampleNotes);
     return sampleNotes;
   } catch (error) {
     console.error('Error loading notes:', error);
+    return sampleNotes;
+  }
+}
+
+// 从本地存储获取所有笔记，包括已删除的
+function getAllLocalNotes(): Note[] {
+  if (typeof window === 'undefined') return sampleNotes;
+
+  try {
+    const stored = localStorage.getItem(NOTES_STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+    return sampleNotes;
+  } catch (error) {
+    console.error('Error loading all notes:', error);
     return sampleNotes;
   }
 }
@@ -400,7 +460,25 @@ function saveLocalNotes(notes: Note[]): void {
   if (typeof window === 'undefined') return;
 
   try {
-    localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
+    // 获取当前所有笔记（包括已删除的）
+    const currentNotes = getAllLocalNotes();
+    
+    // 创建一个ID到笔记的映射，方便查找和更新
+    const noteMap = new Map<string, Note>();
+    
+    // 添加当前所有笔记
+    currentNotes.forEach(note => {
+      noteMap.set(note.id, note);
+    });
+    
+    // 更新或添加新的笔记
+    notes.forEach(note => {
+      noteMap.set(note.id, note);
+    });
+    
+    // 转换回数组并保存
+    const allNotes = Array.from(noteMap.values());
+    localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(allNotes));
   } catch (error) {
     console.error('Error saving notes:', error);
   }
@@ -416,6 +494,29 @@ async function syncNotesToServer(notes: Note[]): Promise<void> {
   try {
     console.log('尝试同步笔记到服务器...');
     
+    // 获取本地最后同步时间
+    const localLastSyncTime = getLocalLastSyncTime();
+    
+    // 获取所有笔记，包括已删除的
+    const allNotes = getAllLocalNotes();
+    
+    // 如果有最后同步时间，只同步此时间之后更新的笔记（包括已删除的）
+    let notesToSync = allNotes;
+    if (localLastSyncTime) {
+      const lastSyncDate = new Date(localLastSyncTime);
+      notesToSync = allNotes.filter(note => {
+        const updateDate = new Date(note.updatedAt);
+        return updateDate > lastSyncDate;
+      });
+      console.log(`筛选出 ${notesToSync.length} 条需要同步的笔记（共 ${allNotes.length} 条，包括已删除）`);
+    }
+    
+    // 如果没有需要同步的笔记，直接返回
+    if (notesToSync.length === 0) {
+      console.log('没有需要同步的笔记');
+      return;
+    }
+    
     // 检查是否为开发环境
     const isDev = process.env.IS_DEV === 'true';
     
@@ -425,7 +526,7 @@ async function syncNotesToServer(notes: Note[]): Promise<void> {
         'Content-Type': 'application/json',
         'x-access-code': accessCode
       },
-      body: JSON.stringify(notes)
+      body: JSON.stringify(notesToSync)
     });
     
     if (!response.ok) {
@@ -504,13 +605,16 @@ export async function getCategories(): Promise<NoteCategory[]> {
           // 合并本地和服务器分类，以服务器为准
           const mergedCategories = mergeCategories(localCategories, recentCategories);
           
+          // 去重处理
+          const uniqueCategories = removeDuplicateCategories(mergedCategories);
+          
           // 更新本地存储
-          saveLocalCategories(mergedCategories);
+          saveLocalCategories(uniqueCategories);
           
           // 将合并后的分类同步回服务器
-          await syncCategoriesToServer(mergedCategories);
+          await syncCategoriesToServer(uniqueCategories);
           
-          return mergedCategories;
+          return uniqueCategories;
         }
       } else {
         // 如果没有最后同步时间，从服务器获取所有分类
@@ -530,25 +634,33 @@ export async function getCategories(): Promise<NoteCategory[]> {
           // 合并本地和服务器分类，以服务器为准
           const mergedCategories = mergeCategories(localCategories, serverCategories);
           
-          // 更新本地存储
-          saveLocalCategories(mergedCategories);
+          // 去重处理
+          const uniqueCategories = removeDuplicateCategories(mergedCategories);
           
-          return mergedCategories;
+          // 更新本地存储
+          saveLocalCategories(uniqueCategories);
+          
+          // 将去重后的分类同步回服务器
+          await syncCategoriesToServer(uniqueCategories);
+          
+          return uniqueCategories;
         }
       }
       
       // 如果没有从服务器获取到分类，同步本地分类到服务器
-      await syncCategoriesToServer(localCategories);
+      const uniqueLocalCategories = removeDuplicateCategories(localCategories);
+      await syncCategoriesToServer(uniqueLocalCategories);
       
-      return localCategories;
+      return uniqueLocalCategories;
     } catch (error) {
       console.error('从服务器获取分类失败:', error);
-      return getLocalCategories();
+      const uniqueLocalCategories = removeDuplicateCategories(getLocalCategories());
+      return uniqueLocalCategories;
     }
   }
   
-  // 如果未启用同步，使用本地存储
-  return getLocalCategories();
+  // 如果未启用同步，使用本地存储并确保去重
+  return removeDuplicateCategories(getLocalCategories());
 }
 
 // 合并分类，处理冲突
@@ -652,13 +764,38 @@ async function syncCategoriesToServer(categories: NoteCategory[]): Promise<void>
 
 // 保存分类
 export async function saveCategories(categories: NoteCategory[]): Promise<void> {
+  // 去重：根据分类名称去重
+  const uniqueCategories = removeDuplicateCategories(categories);
+  
   // 保存到本地存储
-  saveLocalCategories(categories);
+  saveLocalCategories(uniqueCategories);
   
   // 如果启用了同步，也保存到服务器
   if (isSyncEnabled() && typeof window !== 'undefined') {
-    await syncCategoriesToServer(categories);
+    await syncCategoriesToServer(uniqueCategories);
   }
+}
+
+// 根据分类名称去重
+function removeDuplicateCategories(categories: NoteCategory[]): NoteCategory[] {
+  const nameMap = new Map<string, NoteCategory>();
+  
+  // 按照顺序处理，如果有重名的，保留最后一个
+  categories.forEach(category => {
+    nameMap.set(category.name.toLowerCase(), category);
+  });
+  
+  // 确保"其他"分类总是存在
+  if (!nameMap.has('其他'.toLowerCase())) {
+    const otherCategory = categories.find(c => c.name === '其他') || {
+      id: 'other',
+      name: '其他',
+      description: '未分类的笔记'
+    };
+    nameMap.set('其他'.toLowerCase(), otherCategory);
+  }
+  
+  return Array.from(nameMap.values());
 }
 
 // 搜索笔记
@@ -693,17 +830,51 @@ export async function searchAllNotes(query: string): Promise<Note[]> {
 export async function createNote(noteData: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>): Promise<Note> {
   const notes = await getNotes();
   
+  // 生成唯一ID
+  const newId = generateId();
+  
+  // 检查是否已存在相同ID的笔记（极小概率但可能发生）
+  const existingNote = notes.find(note => note.id === newId);
+  if (existingNote) {
+    console.log('ID冲突，重新生成ID');
+    return createNote(noteData); // 递归调用自身重新生成ID
+  }
+  
+  const now = new Date().toISOString();
   const newNote: Note = {
     ...noteData,
-    id: generateId(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    id: newId,
+    createdAt: now,
+    updatedAt: now,
   };
   
+  // 将新笔记添加到笔记列表的开头
   const updatedNotes = [newNote, ...notes];
-  await saveNotes(updatedNotes);
+  
+  // 检查是否存在重复ID（额外检查）
+  const uniqueNotes = removeDuplicateNotes(updatedNotes);
+  
+  await saveNotes(uniqueNotes);
   
   return newNote;
+}
+
+// 去除重复ID的笔记，保留最新的
+function removeDuplicateNotes(notes: Note[]): Note[] {
+  const idMap = new Map<string, Note>();
+  
+  // 按照顺序处理，如果有重复ID，保留最后一个（最新的）
+  notes.forEach(note => {
+    // 如果已存在相同ID的笔记，只有当新笔记更新时间更晚时才替换
+    const existingNote = idMap.get(note.id);
+    if (!existingNote || new Date(note.updatedAt) > new Date(existingNote.updatedAt)) {
+      idMap.set(note.id, note);
+    }
+  });
+  
+  // 转换回数组并按更新时间排序（最新的在前）
+  return Array.from(idMap.values())
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 // 更新笔记
@@ -728,13 +899,26 @@ export async function updateNote(id: string, noteData: Partial<Omit<Note, 'id' |
 // 删除笔记
 export async function deleteNote(id: string): Promise<boolean> {
   const notes = await getNotes();
-  const filteredNotes = notes.filter(note => note.id !== id);
+  const noteIndex = notes.findIndex(note => note.id === id);
   
-  if (filteredNotes.length === notes.length) {
+  if (noteIndex === -1) {
     return false; // 没有找到要删除的笔记
   }
   
-  await saveNotes(filteredNotes);
+  // 使用软删除标记笔记为已删除，而不是从数组中移除
+  const updatedNotes = notes.map(note => {
+    if (note.id === id) {
+      return {
+        ...note,
+        deleted: true,
+        deletedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString() // 更新时间戳以触发同步
+      };
+    }
+    return note;
+  });
+  
+  await saveNotes(updatedNotes);
   return true;
 }
 

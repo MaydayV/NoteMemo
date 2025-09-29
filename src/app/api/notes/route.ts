@@ -56,37 +56,62 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const since = url.searchParams.get('since');
     
+    const notesCollection = await getNotesCollection(userId);
+    
+    if (!notesCollection) {
+      console.error('无法获取笔记集合');
+      return NextResponse.json([]);
+    }
+
+    // 如果提供了since参数，获取自该时间以来更新的笔记
     if (since) {
-      console.log(`获取自 ${since} 以来更新的笔记...`);
-      // 获取自指定时间以来更新的笔记
-      const recentNotes = await getRecentlyUpdatedNotes(userId, since);
-      console.log(`找到 ${recentNotes.length} 条更新的笔记`);
-      return NextResponse.json(recentNotes);
-    } else {
-      console.log('获取所有笔记...');
-      // 获取所有笔记
-      const notesCollection = await getNotesCollection(userId);
-      if (!notesCollection) {
-        console.error('无法获取笔记集合');
-        return NextResponse.json([]);
-      }
+      console.log(`获取自 ${since} 以来更新的笔记`);
       
-      const notes = await notesCollection.find({}).toArray();
-      console.log(`找到 ${notes.length} 条笔记`);
+      // 查询自指定时间以来更新的笔记
+      const recentNotes = await notesCollection.find({
+        updatedAt: { $gt: since }
+      }).toArray();
+      
+      console.log(`找到 ${recentNotes.length} 条更新的笔记`);
       
       // 转换MongoDB文档为Note对象
-      const formattedNotes = notes.map(note => ({
-        id: note._id.toString(),
+      const notes = recentNotes.map(note => ({
+        id: note.id,
         title: note.title,
         content: note.content,
         category: note.category,
         tags: note.tags || [],
         createdAt: note.createdAt,
-        updatedAt: note.updatedAt
+        updatedAt: note.updatedAt,
+        deleted: note.deleted || false,
+        deletedAt: note.deletedAt || null
       }));
       
-      return NextResponse.json(formattedNotes);
+      return NextResponse.json(notes);
     }
+    
+    // 如果没有since参数，获取所有未删除的笔记
+    console.log('获取所有笔记');
+    
+    // 查询所有未删除的笔记
+    const allNotes = await notesCollection.find({
+      deleted: { $ne: true } // 排除已删除的笔记
+    }).toArray();
+    
+    console.log(`找到 ${allNotes.length} 条笔记`);
+    
+    // 转换MongoDB文档为Note对象
+    const notes = allNotes.map(note => ({
+      id: note.id,
+      title: note.title,
+      content: note.content,
+      category: note.category,
+      tags: note.tags || [],
+      createdAt: note.createdAt,
+      updatedAt: note.updatedAt
+    }));
+      
+      return NextResponse.json(notes);
   } catch (error) {
     console.error('获取笔记失败:', error);
     return NextResponse.json({ 
@@ -153,21 +178,24 @@ export async function POST(request: NextRequest) {
     
     // 对每个笔记进行upsert操作
     for (const note of notes) {
-      console.log(`保存笔记: ${note.id} - ${note.title}`);
+      console.log(`保存笔记: ${note.id} - ${note.title} ${note.deleted ? '(已删除)' : ''}`);
       
       // 使用MongoDB文档格式，避免直接使用_id
       const noteDoc = {
+        id: note.id, // 确保保存id字段
         title: note.title,
         content: note.content,
         category: note.category,
         tags: note.tags,
         createdAt: note.createdAt,
-        updatedAt: note.updatedAt
+        updatedAt: note.updatedAt,
+        deleted: note.deleted || false, // 添加删除标记
+        deletedAt: note.deletedAt || null // 删除时间
       };
       
       // 使用note.id作为查询条件
       await notesCollection.updateOne(
-        { id: note.id },
+        { id: note.id }, // 使用id字段作为唯一标识符
         { $set: noteDoc },
         { upsert: true }
       );

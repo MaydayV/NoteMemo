@@ -61,6 +61,11 @@ export default function LoginForm({ onAuthenticated }: LoginFormProps) {
     <div className="min-h-screen flex items-center justify-center bg-white">
       <div className="max-w-md w-full mx-4">
         <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <svg className="h-16 w-16 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
+          </div>
           <h1 className="text-2xl font-light text-black mb-2">NoteMemo</h1>
           <p className="text-gray-600">请输入访问码</p>
         </div>
@@ -94,7 +99,14 @@ export default function LoginForm({ onAuthenticated }: LoginFormProps) {
 
         <div className="mt-8 flex justify-center items-center">
           <div className="text-center">
-            <p className="text-xs text-gray-500">极简笔记备忘录</p>
+            <p className="text-xs text-gray-500">
+              <a href="https://github.com/MaydayV" target="_blank" rel="noopener noreferrer" className="hover:underline">
+                © MaydayV
+              </a> • 
+              <a href="https://opensource.org/licenses/MIT" target="_blank" rel="noopener noreferrer" className="hover:underline ml-1">
+                MIT License
+              </a>
+            </p>
             <div className="mt-2 flex items-center justify-center">
               <button 
                 onClick={toggleInfo}
