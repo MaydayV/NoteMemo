@@ -8,10 +8,18 @@ const DB_NAME = 'notememo';
 const NOTES_COLLECTION = 'notes';
 const CATEGORIES_COLLECTION = 'categories';
 const USERS_COLLECTION = 'users';
+const SYNC_INFO_COLLECTION = 'sync_info';
 
 // 缓存数据库连接
 let cachedClient: MongoClient | null = null;
 let cachedDb: Db | null = null;
+
+// 同步信息接口
+export interface SyncInfo {
+  userId: string;
+  lastSyncTime: string;
+  deviceId: string;
+}
 
 // 连接数据库
 export async function connectToDatabase() {
@@ -102,4 +110,117 @@ export async function getCategoriesCollection(userId: string): Promise<Collectio
   if (!db) return null;
   
   return db.collection(`${CATEGORIES_COLLECTION}_${userId}`);
+}
+
+// 获取当前用户的同步信息集合
+export async function getSyncInfoCollection(userId: string): Promise<Collection | null> {
+  const { db } = await connectToDatabase();
+  if (!db) return null;
+  
+  return db.collection(`${SYNC_INFO_COLLECTION}_${userId}`);
+}
+
+// 生成设备ID
+export function generateDeviceId(): string {
+  if (typeof window === 'undefined') return 'server';
+  
+  // 尝试从localStorage获取设备ID
+  const storedDeviceId = localStorage.getItem('note-memo-device-id');
+  if (storedDeviceId) return storedDeviceId;
+  
+  // 生成新的设备ID
+  const newDeviceId = 'device_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
+  localStorage.setItem('note-memo-device-id', newDeviceId);
+  return newDeviceId;
+}
+
+// 更新同步信息
+export async function updateSyncInfo(userId: string): Promise<void> {
+  const syncInfoCollection = await getSyncInfoCollection(userId);
+  if (!syncInfoCollection) return;
+  
+  const deviceId = generateDeviceId();
+  const now = new Date().toISOString();
+  
+  // 更新或创建同步信息
+  await syncInfoCollection.updateOne(
+    { deviceId },
+    { 
+      $set: { 
+        userId,
+        lastSyncTime: now,
+        deviceId
+      }
+    },
+    { upsert: true }
+  );
+}
+
+// 获取最后同步时间
+export async function getLastSyncTime(userId: string): Promise<string | null> {
+  const syncInfoCollection = await getSyncInfoCollection(userId);
+  if (!syncInfoCollection) return null;
+  
+  const deviceId = generateDeviceId();
+  
+  // 查找当前设备的同步信息
+  const syncInfo = await syncInfoCollection.findOne({ deviceId });
+  if (!syncInfo) return null;
+  
+  return syncInfo.lastSyncTime;
+}
+
+// 获取所有设备的最后同步时间
+export async function getAllDevicesSyncInfo(userId: string): Promise<SyncInfo[]> {
+  const syncInfoCollection = await getSyncInfoCollection(userId);
+  if (!syncInfoCollection) return [];
+  
+  // 查找所有设备的同步信息
+  const syncInfos = await syncInfoCollection.find({ userId }).toArray();
+  
+  return syncInfos.map(info => ({
+    userId: info.userId,
+    lastSyncTime: info.lastSyncTime,
+    deviceId: info.deviceId
+  }));
+}
+
+// 获取最近更新的笔记
+export async function getRecentlyUpdatedNotes(userId: string, since: string): Promise<Note[]> {
+  const notesCollection = await getNotesCollection(userId);
+  if (!notesCollection) return [];
+  
+  // 查找自指定时间以来更新的笔记
+  const recentNotes = await notesCollection.find({
+    updatedAt: { $gt: since }
+  }).toArray();
+  
+  // 转换MongoDB文档为Note对象
+  return recentNotes.map(note => ({
+    id: note._id.toString(),
+    title: note.title,
+    content: note.content,
+    category: note.category,
+    tags: note.tags || [],
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt
+  }));
+}
+
+// 获取最近更新的分类
+export async function getRecentlyUpdatedCategories(userId: string, since: string): Promise<NoteCategory[]> {
+  const categoriesCollection = await getCategoriesCollection(userId);
+  if (!categoriesCollection) return [];
+  
+  // 查找自指定时间以来更新的分类
+  const recentCategories = await categoriesCollection.find({
+    updatedAt: { $gt: since }
+  }).toArray();
+  
+  // 转换MongoDB文档为NoteCategory对象
+  return recentCategories.map(category => ({
+    id: category._id.toString(),
+    name: category.name,
+    description: category.description
+  }));
 } 

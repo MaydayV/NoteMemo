@@ -3,7 +3,11 @@ import {
   connectToDatabase, 
   getUserId, 
   getNotesCollection, 
-  getCategoriesCollection 
+  getCategoriesCollection,
+  updateSyncInfo,
+  getLastSyncTime,
+  getRecentlyUpdatedNotes,
+  getRecentlyUpdatedCategories
 } from './db';
 import { getCurrentAccessCode } from './auth';
 
@@ -257,6 +261,7 @@ git merge <branch>
 // 本地存储 key
 const NOTES_STORAGE_KEY = 'note-memo-notes';
 const CATEGORIES_STORAGE_KEY = 'note-memo-categories';
+const LAST_SYNC_KEY = 'note-memo-last-sync';
 
 // 检查是否启用同步
 function isSyncEnabled(): boolean {
@@ -271,6 +276,18 @@ async function getCurrentUserId(): Promise<string | null> {
   return await getUserId(accessCode);
 }
 
+// 保存最后同步时间到本地
+function saveLastSyncTime(time: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(LAST_SYNC_KEY, time);
+}
+
+// 获取本地保存的最后同步时间
+function getLocalLastSyncTime(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(LAST_SYNC_KEY);
+}
+
 // 获取所有笔记
 export async function getNotes(): Promise<Note[]> {
   // 如果启用了同步且在客户端环境
@@ -279,33 +296,50 @@ export async function getNotes(): Promise<Note[]> {
       const userId = await getCurrentUserId();
       if (!userId) return getLocalNotes();
       
-      const notesCollection = await getNotesCollection(userId);
-      if (!notesCollection) return getLocalNotes();
+      // 获取本地笔记
+      const localNotes = getLocalNotes();
       
-      // 从数据库获取笔记
-      const dbNotes = await notesCollection.find({}).toArray();
+      // 获取最后同步时间
+      let lastSyncTime = await getLastSyncTime(userId);
+      const localLastSyncTime = getLocalLastSyncTime();
       
-      // 如果数据库中有笔记，则返回
-      if (dbNotes && dbNotes.length > 0) {
-        // 转换MongoDB文档为Note对象
-        const notes = dbNotes.map(note => ({
-          id: note._id.toString(),
-          title: note.title,
-          content: note.content,
-          category: note.category,
-          tags: note.tags || [],
-          createdAt: note.createdAt,
-          updatedAt: note.updatedAt
-        }));
-        
-        // 更新本地存储以便离线访问
-        saveLocalNotes(notes);
-        return notes;
+      // 如果没有服务器同步时间，但有本地同步时间，使用本地时间
+      if (!lastSyncTime && localLastSyncTime) {
+        lastSyncTime = localLastSyncTime;
       }
       
-      // 如果数据库中没有笔记，则使用本地笔记并同步到数据库
-      const localNotes = getLocalNotes();
+      // 如果有最后同步时间，获取自那时以来的更新
+      if (lastSyncTime) {
+        // 获取服务器上最近更新的笔记
+        const recentNotes = await getRecentlyUpdatedNotes(userId, lastSyncTime);
+        
+        if (recentNotes.length > 0) {
+          // 合并本地和服务器笔记，以服务器为准（更新时间较新的优先）
+          const mergedNotes = mergeNotes(localNotes, recentNotes);
+          
+          // 更新本地存储
+          saveLocalNotes(mergedNotes);
+          
+          // 将合并后的笔记同步回服务器
+          await syncNotesToDb(mergedNotes, userId);
+          
+          // 更新同步时间
+          const now = new Date().toISOString();
+          await updateSyncInfo(userId);
+          saveLastSyncTime(now);
+          
+          return mergedNotes;
+        }
+      }
+      
+      // 如果没有最后同步时间或没有最近更新，使用本地笔记并同步到数据库
       await syncNotesToDb(localNotes, userId);
+      
+      // 更新同步时间
+      const now = new Date().toISOString();
+      await updateSyncInfo(userId);
+      saveLastSyncTime(now);
+      
       return localNotes;
     } catch (error) {
       console.error('从数据库获取笔记失败:', error);
@@ -315,6 +349,31 @@ export async function getNotes(): Promise<Note[]> {
   
   // 如果未启用同步或在服务器端，使用本地存储
   return getLocalNotes();
+}
+
+// 合并笔记，处理冲突
+function mergeNotes(localNotes: Note[], serverNotes: Note[]): Note[] {
+  // 创建一个ID到笔记的映射，方便查找
+  const noteMap = new Map<string, Note>();
+  
+  // 先添加所有本地笔记
+  localNotes.forEach(note => {
+    noteMap.set(note.id, note);
+  });
+  
+  // 然后添加或更新服务器笔记（如果时间戳更新）
+  serverNotes.forEach(serverNote => {
+    const localNote = noteMap.get(serverNote.id);
+    
+    // 如果本地没有这个笔记，或者服务器笔记更新时间更晚，使用服务器笔记
+    if (!localNote || new Date(serverNote.updatedAt) > new Date(localNote.updatedAt)) {
+      noteMap.set(serverNote.id, serverNote);
+    }
+  });
+  
+  // 转换回数组并按更新时间排序（最新的在前）
+  return Array.from(noteMap.values())
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 // 从本地存储获取笔记
@@ -354,22 +413,23 @@ async function syncNotesToDb(notes: Note[], userId: string): Promise<void> {
     const notesCollection = await getNotesCollection(userId);
     if (!notesCollection) return;
     
-    // 清空现有笔记并插入新笔记
-    await notesCollection.deleteMany({});
-    
-    if (notes.length > 0) {
-      // 转换Note对象为MongoDB文档
-      const dbNotes = notes.map(note => ({
-        _id: note.id,
-        title: note.title,
-        content: note.content,
-        category: note.category,
-        tags: note.tags,
-        createdAt: note.createdAt,
-        updatedAt: note.updatedAt
-      }));
-      
-      await notesCollection.insertMany(dbNotes);
+    // 对每个笔记进行upsert操作，而不是先删除所有笔记
+    for (const note of notes) {
+      await notesCollection.updateOne(
+        { _id: note.id },
+        {
+          $set: {
+            _id: note.id,
+            title: note.title,
+            content: note.content,
+            category: note.category,
+            tags: note.tags,
+            createdAt: note.createdAt,
+            updatedAt: note.updatedAt
+          }
+        },
+        { upsert: true }
+      );
     }
   } catch (error) {
     console.error('同步笔记到数据库失败:', error);
@@ -387,6 +447,11 @@ export async function saveNotes(notes: Note[]): Promise<void> {
       const userId = await getCurrentUserId();
       if (userId) {
         await syncNotesToDb(notes, userId);
+        
+        // 更新同步时间
+        const now = new Date().toISOString();
+        await updateSyncInfo(userId);
+        saveLastSyncTime(now);
       }
     } catch (error) {
       console.error('保存笔记到数据库失败:', error);
@@ -402,29 +467,40 @@ export async function getCategories(): Promise<NoteCategory[]> {
       const userId = await getCurrentUserId();
       if (!userId) return getLocalCategories();
       
-      const categoriesCollection = await getCategoriesCollection(userId);
-      if (!categoriesCollection) return getLocalCategories();
+      // 获取本地分类
+      const localCategories = getLocalCategories();
       
-      // 从数据库获取分类
-      const dbCategories = await categoriesCollection.find({}).toArray();
+      // 获取最后同步时间
+      let lastSyncTime = await getLastSyncTime(userId);
+      const localLastSyncTime = getLocalLastSyncTime();
       
-      // 如果数据库中有分类，则返回
-      if (dbCategories && dbCategories.length > 0) {
-        // 转换MongoDB文档为NoteCategory对象
-        const categories = dbCategories.map(category => ({
-          id: category._id.toString(),
-          name: category.name,
-          description: category.description
-        }));
-        
-        // 更新本地存储以便离线访问
-        saveLocalCategories(categories);
-        return categories;
+      // 如果没有服务器同步时间，但有本地同步时间，使用本地时间
+      if (!lastSyncTime && localLastSyncTime) {
+        lastSyncTime = localLastSyncTime;
       }
       
-      // 如果数据库中没有分类，则使用本地分类并同步到数据库
-      const localCategories = getLocalCategories();
+      // 如果有最后同步时间，获取自那时以来的更新
+      if (lastSyncTime) {
+        // 获取服务器上最近更新的分类
+        const recentCategories = await getRecentlyUpdatedCategories(userId, lastSyncTime);
+        
+        if (recentCategories.length > 0) {
+          // 合并本地和服务器分类，以服务器为准
+          const mergedCategories = mergeCategories(localCategories, recentCategories);
+          
+          // 更新本地存储
+          saveLocalCategories(mergedCategories);
+          
+          // 将合并后的分类同步回服务器
+          await syncCategoriesToDb(mergedCategories, userId);
+          
+          return mergedCategories;
+        }
+      }
+      
+      // 如果没有最后同步时间或没有最近更新，使用本地分类并同步到数据库
       await syncCategoriesToDb(localCategories, userId);
+      
       return localCategories;
     } catch (error) {
       console.error('从数据库获取分类失败:', error);
@@ -434,6 +510,26 @@ export async function getCategories(): Promise<NoteCategory[]> {
   
   // 如果未启用同步或在服务器端，使用本地存储
   return getLocalCategories();
+}
+
+// 合并分类，处理冲突
+function mergeCategories(localCategories: NoteCategory[], serverCategories: NoteCategory[]): NoteCategory[] {
+  // 创建一个ID到分类的映射，方便查找
+  const categoryMap = new Map<string, NoteCategory>();
+  
+  // 先添加所有本地分类
+  localCategories.forEach(category => {
+    categoryMap.set(category.id, category);
+  });
+  
+  // 然后添加或更新服务器分类
+  serverCategories.forEach(serverCategory => {
+    // 服务器分类优先
+    categoryMap.set(serverCategory.id, serverCategory);
+  });
+  
+  // 转换回数组
+  return Array.from(categoryMap.values());
 }
 
 // 从本地存储获取分类
@@ -472,18 +568,20 @@ async function syncCategoriesToDb(categories: NoteCategory[], userId: string): P
     const categoriesCollection = await getCategoriesCollection(userId);
     if (!categoriesCollection) return;
     
-    // 清空现有分类并插入新分类
-    await categoriesCollection.deleteMany({});
-    
-    if (categories.length > 0) {
-      // 转换NoteCategory对象为MongoDB文档
-      const dbCategories = categories.map(category => ({
-        _id: category.id,
-        name: category.name,
-        description: category.description
-      }));
-      
-      await categoriesCollection.insertMany(dbCategories);
+    // 对每个分类进行upsert操作，而不是先删除所有分类
+    for (const category of categories) {
+      await categoriesCollection.updateOne(
+        { _id: category.id },
+        {
+          $set: {
+            _id: category.id,
+            name: category.name,
+            description: category.description,
+            updatedAt: new Date().toISOString() // 添加更新时间用于同步
+          }
+        },
+        { upsert: true }
+      );
     }
   } catch (error) {
     console.error('同步分类到数据库失败:', error);
@@ -501,6 +599,11 @@ export async function saveCategories(categories: NoteCategory[]): Promise<void> 
       const userId = await getCurrentUserId();
       if (userId) {
         await syncCategoriesToDb(categories, userId);
+        
+        // 更新同步时间
+        const now = new Date().toISOString();
+        await updateSyncInfo(userId);
+        saveLastSyncTime(now);
       }
     } catch (error) {
       console.error('保存分类到数据库失败:', error);
