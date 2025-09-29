@@ -6,13 +6,9 @@
 
 ## 应用截图
 
-### 登录页面
-
-![登录页面](/public/Loginpage.png)
-
-### 笔记列表页面
-
-![笔记列表页面](/public/Listpage.png)
+| 登录页面 | 笔记列表页面 | 笔记详情页面 |
+|:-------:|:----------:|:----------:|
+| ![登录页面](/public/Loginpage.png) | ![笔记列表页面](/public/Listpage.png) | ![笔记详情页面](/public/NoteDetails.png) |
 
 ## 功能特性
 
