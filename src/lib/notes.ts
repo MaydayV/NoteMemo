@@ -1,7 +1,7 @@
+'use client';
+
 import { Note, NoteCategory } from '@/types/note';
 import { isSyncEnabled, getSyncUserId } from './settings';
-import { getCollection } from './mongodb';
-import { Document, WithId } from 'mongodb';
 
 // 默认笔记分类
 export const defaultCategories: NoteCategory[] = [
@@ -267,31 +267,30 @@ export async function getNotes(): Promise<Note[]> {
         throw new Error('用户ID未设置');
       }
       
-      // 从MongoDB获取笔记
-      const collection = await getCollection('notes');
-      const documents = await collection.find({ userId }).toArray();
-      // 使用类型断言将MongoDB文档转换为Note类型
-      const notes = documents.map(doc => {
-        // 移除MongoDB自动添加的_id字段
-        const { _id, ...noteData } = doc;
-        return noteData as Note;
-      });
+      // 从API获取笔记
+      const response = await fetch(`/api/notes?userId=${encodeURIComponent(userId)}`);
+      
+      if (!response.ok) {
+        throw new Error(`API请求失败: ${response.status}`);
+      }
+      
+      const notes = await response.json() as Note[];
       
       if (notes && notes.length > 0) {
-        // 如果MongoDB中有数据，返回MongoDB数据
+        // 如果API中有数据，返回API数据
         return notes;
       }
       
-      // 如果MongoDB中没有数据，使用本地数据
+      // 如果API中没有数据，使用本地数据
       const localNotes = getLocalNotes();
       
-      // 将本地数据同步到MongoDB
-      await saveNotesToMongoDB(localNotes, userId);
+      // 将本地数据同步到API
+      await saveNotesToAPI(localNotes, userId);
       
       return localNotes;
     } catch (error) {
-      console.error('Error loading notes from MongoDB:', error);
-      // 如果从MongoDB获取失败，回退到本地存储
+      console.error('Error loading notes from API:', error);
+      // 如果从API获取失败，回退到本地存储
       return getLocalNotes();
     }
   } else {
@@ -318,23 +317,22 @@ function getLocalNotes(): Note[] {
   }
 }
 
-// 保存笔记到MongoDB
-async function saveNotesToMongoDB(notes: Note[], userId: string): Promise<void> {
+// 保存笔记到API
+async function saveNotesToAPI(notes: Note[], userId: string): Promise<void> {
   try {
-    const collection = await getCollection('notes');
+    const response = await fetch('/api/notes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ notes, userId }),
+    });
     
-    // 删除用户现有的笔记
-    await collection.deleteMany({ userId });
-    
-    // 添加用户ID到每条笔记
-    const notesWithUserId = notes.map(note => ({ ...note, userId }));
-    
-    // 批量插入笔记
-    if (notesWithUserId.length > 0) {
-      await collection.insertMany(notesWithUserId);
+    if (!response.ok) {
+      throw new Error(`API请求失败: ${response.status}`);
     }
   } catch (error) {
-    console.error('Error saving notes to MongoDB:', error);
+    console.error('Error saving notes to API:', error);
     throw error;
   }
 }
@@ -355,16 +353,16 @@ export async function saveNotes(notes: Note[]): Promise<void> {
   // 保存到本地
   saveNotesToLocal(notes);
   
-  // 如果启用了同步，也保存到MongoDB
+  // 如果启用了同步，也保存到API
   if (isSyncEnabled()) {
     try {
       const userId = getSyncUserId();
       if (!userId) {
         throw new Error('用户ID未设置');
       }
-      await saveNotesToMongoDB(notes, userId);
+      await saveNotesToAPI(notes, userId);
     } catch (error) {
-      console.error('Failed to sync notes to MongoDB:', error);
+      console.error('Failed to sync notes to API:', error);
       // 同步失败不阻止本地保存
     }
   }
@@ -383,31 +381,30 @@ export async function getCategories(): Promise<NoteCategory[]> {
         throw new Error('用户ID未设置');
       }
       
-      // 从MongoDB获取分类
-      const collection = await getCollection('categories');
-      const documents = await collection.find({ userId }).toArray();
-      // 使用类型断言将MongoDB文档转换为NoteCategory类型
-      const categories = documents.map(doc => {
-        // 移除MongoDB自动添加的_id字段
-        const { _id, ...categoryData } = doc;
-        return categoryData as NoteCategory;
-      });
+      // 从API获取分类
+      const response = await fetch(`/api/categories?userId=${encodeURIComponent(userId)}`);
+      
+      if (!response.ok) {
+        throw new Error(`API请求失败: ${response.status}`);
+      }
+      
+      const categories = await response.json() as NoteCategory[];
       
       if (categories && categories.length > 0) {
-        // 如果MongoDB中有数据，返回MongoDB数据
+        // 如果API中有数据，返回API数据
         return categories;
       }
       
-      // 如果MongoDB中没有数据，使用本地数据
+      // 如果API中没有数据，使用本地数据
       const localCategories = getLocalCategories();
       
-      // 将本地数据同步到MongoDB
-      await saveCategoriesToMongoDB(localCategories, userId);
+      // 将本地数据同步到API
+      await saveCategoriesToAPI(localCategories, userId);
       
       return localCategories;
     } catch (error) {
-      console.error('Error loading categories from MongoDB:', error);
-      // 如果从MongoDB获取失败，回退到本地存储
+      console.error('Error loading categories from API:', error);
+      // 如果从API获取失败，回退到本地存储
       return getLocalCategories();
     }
   } else {
@@ -433,23 +430,22 @@ function getLocalCategories(): NoteCategory[] {
   }
 }
 
-// 保存分类到MongoDB
-async function saveCategoriesToMongoDB(categories: NoteCategory[], userId: string): Promise<void> {
+// 保存分类到API
+async function saveCategoriesToAPI(categories: NoteCategory[], userId: string): Promise<void> {
   try {
-    const collection = await getCollection('categories');
+    const response = await fetch('/api/categories', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ categories, userId }),
+    });
     
-    // 删除用户现有的分类
-    await collection.deleteMany({ userId });
-    
-    // 添加用户ID到每个分类
-    const categoriesWithUserId = categories.map(category => ({ ...category, userId }));
-    
-    // 批量插入分类
-    if (categoriesWithUserId.length > 0) {
-      await collection.insertMany(categoriesWithUserId);
+    if (!response.ok) {
+      throw new Error(`API请求失败: ${response.status}`);
     }
   } catch (error) {
-    console.error('Error saving categories to MongoDB:', error);
+    console.error('Error saving categories to API:', error);
     throw error;
   }
 }
@@ -470,16 +466,16 @@ export async function saveCategories(categories: NoteCategory[]): Promise<void> 
   // 保存到本地
   saveCategoriesToLocal(categories);
   
-  // 如果启用了同步，也保存到MongoDB
+  // 如果启用了同步，也保存到API
   if (isSyncEnabled()) {
     try {
       const userId = getSyncUserId();
       if (!userId) {
         throw new Error('用户ID未设置');
       }
-      await saveCategoriesToMongoDB(categories, userId);
+      await saveCategoriesToAPI(categories, userId);
     } catch (error) {
-      console.error('Failed to sync categories to MongoDB:', error);
+      console.error('Failed to sync categories to API:', error);
       // 同步失败不阻止本地保存
     }
   }

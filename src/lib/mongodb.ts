@@ -1,3 +1,4 @@
+import 'server-only';
 import { MongoClient, ServerApiVersion } from 'mongodb';
 
 // 环境变量中的MongoDB连接字符串
