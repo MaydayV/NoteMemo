@@ -17,7 +17,7 @@
 - ✅ **卡片式笔记展示** - 清晰的卡片布局
 - ✅ **快速搜索功能** - 支持标题、内容、分类和标签搜索
 - ✅ **分类筛选** - 按分类快速筛选笔记
-- ✅ **无数据库设计** - 使用本地存储，无需配置数据库
+- ✅ **本地存储** - 无需数据库也可使用（基本功能）
 - ✅ **响应式设计** - 适配各种设备屏幕
 - ✅ **键盘快捷键** - Cmd/Ctrl + K 快速聚焦搜索
 - ✅ **PWA 支持** - 支持添加到主屏幕，离线访问
@@ -82,6 +82,7 @@ NoteMemo 现在支持多设备同步功能，可以通过 MongoDB 数据库在�
 1. 在 Vercel 项目中安装 MongoDB Atlas 集成：
    - 进入 Vercel 项目 > Storage 选项卡
    - 选择 MongoDB Atlas 并完成连接配置
+   - **重要**：在配置过程中，如果要求填写数据库名称，请输入 `notememo`（全部小写）
    - Vercel 会自动为您的项目添加 `MONGODB_URI` 环境变量
 
 2. 启用同步功能：
@@ -103,6 +104,14 @@ NoteMemo 支持多个用户通过不同的访问码访问自己的笔记。
    - 确保选中所有环境（Production, Preview, Development）
 
 2. 每个访问码对应一个独立的用户，拥有自己的笔记和分类
+
+### 访问码优先级
+
+系统按以下优先级检查访问码：
+
+1. `ACCESS_CODES` 环境变量（支持多用户）
+2. `NEXT_PUBLIC_ACCESS_CODE` 或 `ACCESS_CODE` 环境变量（单用户）
+3. 开发环境下默认访问码 `123456`（仅在开发环境有效）
 
 ### 数据同步冲突解决
 
@@ -142,6 +151,10 @@ NoteMemo 实现了基于时间戳的数据同步冲突解决机制，确保多�
 src/
 ├── app/
 │   ├── api/
+│   │   ├── notes/
+│   │   │   └── route.ts        # 笔记API路由
+│   │   ├── categories/
+│   │   │   └── route.ts        # 分类API路由
 │   │   └── sync/
 │   │       └── route.ts        # 同步API路由
 │   ├── layout.tsx
@@ -156,6 +169,7 @@ src/
 │   ├── NoteForm.tsx       # 笔记编辑表单
 │   ├── CategoryModal.tsx  # 分类管理模态框
 │   ├── SyncStatus.tsx     # 同步状态显示组件
+│   ├── PWAInitializer.tsx # PWA初始化组件
 │   └── MarkdownRenderer.tsx # Markdown 渲染组件
 ├── lib/
 │   ├── auth.ts           # 认证工具函数
@@ -206,11 +220,14 @@ src/
 | 变量名 | 说明 | 示例 |
 |--------|------|------|
 | `ACCESS_CODE` | 6位数字访问码，用于登录验证 | `123456` |
+| `NEXT_PUBLIC_ACCESS_CODE` | 与ACCESS_CODE功能相同，兼容旧版本 | `123456` |
 | `ACCESS_CODES` | 多个访问码，用逗号分隔 | `123456,654321,111111` |
 | `ENABLE_SYNC` | 是否启用多设备同步 | `true` 或 `false` |
 | `MONGODB_URI` | MongoDB连接字符串 | `mongodb+srv://...` |
 
-> **注意**：在 Vercel 部署时，请直接在 Vercel 界面中添加环境变量，不要使用引用语法（如 `@access_code`）
+> **注意**：
+> 1. 在 Vercel 部署时，请直接在 Vercel 界面中添加环境变量，不要使用引用语法（如 `@access_code`）
+> 2. 如果启用多设备同步，数据库名称必须设置为 `notememo`（全部小写）
 
 ## 开发命令
 
