@@ -71,6 +71,8 @@ npm run dev
 
 4. 部署完成！
 
+5. 最新部署版本可访问：[https://notememo.vercel.app](https://notememo.vercel.app)
+
 ## 多设备同步功能
 
 NoteMemo 现在支持多设备同步功能，可以通过 MongoDB 数据库在不同设备间同步笔记内容。
