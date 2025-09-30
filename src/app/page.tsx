@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import AuthGuard from '@/components/AuthGuard';
 import SearchBar from '@/components/SearchBar';
 import NoteCard from '@/components/NoteCard';
@@ -16,9 +16,18 @@ import {
   createNote, 
   updateNote, 
   deleteNote,
-  saveCategories
+  saveCategories,
+  saveNotes
 } from '@/lib/notes';
 import { setAuthenticated } from '@/lib/auth';
+
+// 导入/导出数据类型
+interface ExportData {
+  notes: Note[];
+  categories: NoteCategory[];
+  version: string;
+  exportDate: string;
+}
 
 export default function Home() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -34,6 +43,10 @@ export default function Home() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(true); // 添加加载状态
+  const [exportStatus, setExportStatus] = useState<'idle' | 'exporting' | 'success' | 'error'>('idle');
+  const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'success' | 'error'>('idle');
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const notesPerPage = 15; // 修改为每页15条笔记（5行，每行3条）
 
   useEffect(() => {
@@ -158,6 +171,154 @@ export default function Home() {
     setNotes(updatedNotes);
   };
 
+  // 导出数据
+  const handleExportData = async () => {
+    setExportStatus('exporting');
+    try {
+      // 准备导出数据
+      const exportData: ExportData = {
+        notes: notes,
+        categories: categoryData,
+        version: '1.0',
+        exportDate: new Date().toISOString()
+      };
+
+      // 转换为JSON字符串
+      const jsonData = JSON.stringify(exportData, null, 2);
+      
+      // 创建Blob
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      
+      // 创建下载链接
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // 设置文件名 (格式: notememo_backup_YYYY-MM-DD.json)
+      const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      link.download = `notememo_backup_${date}.json`;
+      
+      // 触发下载
+      document.body.appendChild(link);
+      link.click();
+      
+      // 清理
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      setExportStatus('success');
+      
+      // 3秒后重置状态
+      setTimeout(() => {
+        setExportStatus('idle');
+      }, 3000);
+    } catch (error) {
+      console.error('导出数据失败:', error);
+      setExportStatus('error');
+      
+      // 3秒后重置状态
+      setTimeout(() => {
+        setExportStatus('idle');
+      }, 3000);
+    }
+  };
+
+  // 触发文件选择
+  const handleImportClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  // 导入数据
+  const handleImportData = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    setImportError(null);
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setImportStatus('importing');
+    
+    try {
+      // 读取文件
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        try {
+          const content = e.target?.result as string;
+          const importData = JSON.parse(content) as ExportData;
+          
+          // 验证导入数据格式
+          if (!importData.notes || !Array.isArray(importData.notes) || 
+              !importData.categories || !Array.isArray(importData.categories)) {
+            throw new Error('导入文件格式不正确');
+          }
+          
+          // 确认导入
+          if (window.confirm(`确定要导入 ${importData.notes.length} 条笔记和 ${importData.categories.length} 个分类吗？这将覆盖当前数据。`)) {
+            // 保存导入的分类和笔记
+            await saveCategories(importData.categories);
+            await saveNotes(importData.notes);
+            
+            // 重新加载数据
+            const notesData = await getNotes();
+            const categoriesData = await getCategories();
+            
+            setNotes(notesData);
+            setCategoryData(categoriesData);
+            setCategories(['全部', ...categoriesData.map(cat => cat.name)]);
+            
+            setImportStatus('success');
+            
+            // 3秒后重置状态
+            setTimeout(() => {
+              setImportStatus('idle');
+            }, 3000);
+          } else {
+            setImportStatus('idle');
+          }
+        } catch (error) {
+          console.error('解析导入文件失败:', error);
+          setImportError('导入文件格式不正确');
+          setImportStatus('error');
+          
+          // 3秒后重置状态
+          setTimeout(() => {
+            setImportStatus('idle');
+            setImportError(null);
+          }, 3000);
+        }
+      };
+      
+      reader.onerror = () => {
+        setImportError('读取文件失败');
+        setImportStatus('error');
+        
+        // 3秒后重置状态
+        setTimeout(() => {
+          setImportStatus('idle');
+          setImportError(null);
+        }, 3000);
+      };
+      
+      reader.readAsText(file);
+    } catch (error) {
+      console.error('导入数据失败:', error);
+      setImportError('导入数据失败');
+      setImportStatus('error');
+      
+      // 3秒后重置状态
+      setTimeout(() => {
+        setImportStatus('idle');
+        setImportError(null);
+      }, 3000);
+    }
+    
+    // 重置文件输入，以便再次选择同一文件
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   // 分页组件
   const Pagination = () => {
     if (totalPages <= 1) return null;
@@ -253,7 +414,7 @@ export default function Home() {
                   </button>
                   <button
                     onClick={handleLogout}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors rounded-md text-sm md:ml-4"
+                    className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors rounded-md text-sm md:ml-2"
                   >
                     退出
                   </button>
@@ -389,6 +550,96 @@ export default function Home() {
                   MIT License
                 </a>
               </p>
+              
+              {/* 数据导入/导出按钮 */}
+              <div className="flex justify-center space-x-4 mt-3 mb-2">
+                <button
+                  onClick={handleExportData}
+                  disabled={exportStatus === 'exporting'}
+                  className="flex items-center text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  {exportStatus === 'exporting' ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      导出中...
+                    </>
+                  ) : exportStatus === 'success' ? (
+                    <>
+                      <svg className="h-3 w-3 mr-1 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      导出成功
+                    </>
+                  ) : exportStatus === 'error' ? (
+                    <>
+                      <svg className="h-3 w-3 mr-1 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      导出失败
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-3 w-3 mr-1 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      导出数据
+                    </>
+                  )}
+                </button>
+                
+                <button
+                  onClick={handleImportClick}
+                  disabled={importStatus === 'importing'}
+                  className="flex items-center text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  {importStatus === 'importing' ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      导入中...
+                    </>
+                  ) : importStatus === 'success' ? (
+                    <>
+                      <svg className="h-3 w-3 mr-1 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      导入成功
+                    </>
+                  ) : importStatus === 'error' ? (
+                    <>
+                      <svg className="h-3 w-3 mr-1 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      导入失败
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-3 w-3 mr-1 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      导入数据
+                    </>
+                  )}
+                </button>
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportData}
+                  className="hidden"
+                />
+              </div>
+              
+              {importError && (
+                <p className="text-xs text-red-500 mb-2">{importError}</p>
+              )}
+              
               <SyncStatus className="mt-2 justify-center" />
             </div>
           </div>
